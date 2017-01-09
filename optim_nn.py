@@ -160,10 +160,10 @@ class Layer:
         return child
 
     def validate_input(self, X):
-        assert X.shape[1:] == self.input_shape,  (self, X.shape[1:], self.input_shape)
+        assert X.shape[1:] == self.input_shape,  (str(self), X.shape[1:], self.input_shape)
 
     def validate_output(self, Y):
-        assert Y.shape[1:] == self.output_shape, (self, Y.shape[1:], self.output_shape)
+        assert Y.shape[1:] == self.output_shape, (str(self), Y.shape[1:], self.output_shape)
 
     def forward(self, lut):
         assert len(self.parents) > 0, self
@@ -215,7 +215,7 @@ class Input(Layer):
         return X
 
     def dF(self, dY):
-        #self.delta = dY
+        #self.dY = dY
         return np.zeros_like(dY)
 
 class Affine(Layer):
@@ -238,6 +238,17 @@ class Relu(Layer):
     def dF(self, dY):
         return np.where(self.cond, dY, 0)
 
+class GeluApprox(Layer):
+    # refer to https://www.desmos.com/calculator/ydzgtccsld
+    def F(self, X):
+        from scipy.special import expit as sigmoid
+        self.a = 1.704 * X
+        self.sig = sigmoid(self.a)
+        return X * self.sig
+
+    def dF(self, dY):
+        return dY * self.sig * (1 + self.a * (1 - self.sig))
+
 class Dense(Layer):
     def __init__(self, dim):
         super().__init__()
@@ -250,14 +261,12 @@ class Dense(Layer):
 
         self.W = W
         self.dW = dW
-        #self.coeffs = np.random.normal(0, s, size=self.size)
-        #self.biases = np.zeros((self.dim, 1), dtype=nf)
         self.coeffs = self.W[:self.nW].reshape(outs, ins)
         self.biases = self.W[self.nW:].reshape(outs, 1)
         self.dcoeffs = self.dW[:self.nW].reshape(outs, ins)
         self.dbiases = self.dW[self.nW:].reshape(outs)
 
-        # he_normal
+        # he_normal initialization
         s = np.sqrt(2 / ins)
         self.coeffs.flat = np.random.normal(0, s, size=self.nW)
         self.biases.flat = 0
@@ -278,9 +287,6 @@ class Dense(Layer):
         return Y
 
     def dF(self, dY):
-        # http://cs231n.github.io/optimization-2/#gradients-for-vectorized-operations
-        # note: because we only call df once (we only have a df/dy method),
-        #       we have to do df/dw stuff here too.
         dX = self.coeffs.T.dot(dY)
         self.dcoeffs[:] = dY.dot(self.X.T)
         self.dbiases[:] = np.sum(dY, axis=1)
@@ -296,8 +302,8 @@ class Model:
         self.y = y
 
         self.ordered_nodes = self.traverse([], self.y)
-        print([str(node) for node in self.ordered_nodes])
-        #print(len(self.ordered_nodes))
+        node_names = ' '.join([str(node) for node in self.ordered_nodes])
+        print('{} nodes: {}'.format(len(self.ordered_nodes), node_names))
 
         self.make_weights()
 
@@ -336,7 +342,6 @@ class Model:
         lut = dict()
         input_node = self.ordered_nodes[0]
         output_node = self.ordered_nodes[-1]
-        #lut[input_node] = input_node.F(X)
         lut[input_node] = input_node.multi(np.expand_dims(X, 0))
         for node in self.ordered_nodes[1:]:
             lut[node] = node.forward(lut)
@@ -346,13 +351,10 @@ class Model:
         lut = dict()
         input_node = self.ordered_nodes[0]
         output_node = self.ordered_nodes[-1]
-        #lut[output_node] = output_node.dF(error)
         lut[output_node] = output_node.dmulti(np.expand_dims(error, 0))
-        #for node in self.ordered_nodes[-2:0:-1]:
         for node in reversed(self.ordered_nodes[:-1]):
             lut[node] = node.backward(lut)
         #return lut[input_node] # meaningless value
-
         return self.dW
 
     def load_model(self, fn):
@@ -389,7 +391,7 @@ if __name__ == '__main__':
         res_depth = 3,
         res_block = 2, # normally 2
         res_multi = 4, # normally 1
-        activation = 'relu',
+        activation = 'gelu',
 
         optim = 'adam',
         nesterov = False, # only used with SGD or Adam
@@ -427,6 +429,9 @@ if __name__ == '__main__':
     y = x
     last_size = input_samples
 
+    activations = dict(relu=Relu, gelu=GeluApprox)
+    activation = activations[config.activation]
+
     for blah in range(config.res_depth):
         size = config.res_width
 
@@ -437,12 +442,12 @@ if __name__ == '__main__':
         skip = y
         merger = Sum()
         skip.feed(merger)
-        z_start = skip.feed(Relu())
+        z_start = skip.feed(activation())
         for i in range(config.res_multi):
             z = z_start
             for i in range(config.res_block):
                 if i > 0:
-                    z = z.feed(Relu())
+                    z = z.feed(activation())
                 z = z.feed(Dense(size))
             z.feed(merger)
         y = merger
