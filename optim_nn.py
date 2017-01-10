@@ -18,6 +18,13 @@ class Loss:
         d = self.df(r)
         return d / len(d)
 
+class Squared(Loss):
+    def f(self, r):
+        return np.square(r)
+
+    def df(self, r):
+        return 2 * r
+
 class SquaredHalved(Loss):
     def f(self, r):
         return np.square(r) / 2
@@ -144,18 +151,18 @@ class Layer:
 
     def multi(self, B):
         assert len(B) == 1, self
-        return self.F(B[0].T).T
+        return self.F(B[0])
 
     def dmulti(self, dB):
         if len(dB) == 1:
-            return self.dF(dB[0].T).T
+            return self.dF(dB[0])
         else:
             dX = None
             for dY in dB:
                 if dX is None:
-                    dX = self.dF(dY.T).T
+                    dX = self.dF(dY)
                 else:
-                    dX += self.dF(dY.T).T
+                    dX += self.dF(dY)
             return dX
 
     # general utility methods:
@@ -300,10 +307,10 @@ class Dense(Layer):
 
         self.W = W
         self.dW = dW
-        self.coeffs = self.W[:self.nW].reshape(outs, ins)
-        self.biases = self.W[self.nW:].reshape(outs, 1)
-        self.dcoeffs = self.dW[:self.nW].reshape(outs, ins)
-        self.dbiases = self.dW[self.nW:].reshape(outs)
+        self.coeffs = self.W[:self.nW].reshape(ins, outs)
+        self.biases = self.W[self.nW:].reshape(1, outs)
+        self.dcoeffs = self.dW[:self.nW].reshape(ins, outs)
+        self.dbiases = self.dW[self.nW:].reshape(1, outs)
 
         # he_normal initialization
         s = np.sqrt(2 / ins)
@@ -321,14 +328,14 @@ class Dense(Layer):
 
     def F(self, X):
         self.X = X
-        Y = self.coeffs.dot(X) \
+        Y = X.dot(self.coeffs) \
           + self.biases
         return Y
 
     def dF(self, dY):
-        dX = self.coeffs.T.dot(dY)
-        self.dcoeffs[:] = dY.dot(self.X.T)
-        self.dbiases[:] = np.sum(dY, axis=1)
+        dX = dY.dot(self.coeffs.T)
+        self.dcoeffs[:] = self.X.T.dot(dY)
+        self.dbiases[:] = np.sum(dY, axis=0, keepdims=True)
         return dX
 
 # Model
@@ -411,8 +418,8 @@ class Model:
         for i in range(len(denses)):
             a, b = i, i + 1
             b_name = "dense_{}".format(b)
-            denses[a].coeffs = weights[b_name+'_W'].T
-            denses[a].biases = np.expand_dims(weights[b_name+'_b'], -1)
+            denses[a].coeffs = weights[b_name+'_W']
+            denses[a].biases = np.expand_dims(weights[b_name+'_b'], 0)
 
     def save_weights(self, fn, overwrite=False):
         raise NotImplementedError("unimplemented", self)
@@ -433,7 +440,7 @@ if __name__ == '__main__':
         # style of resnet
         # only one is implemented so far
         parallel_style = 'batchless',
-        activation = 'gelu',
+        activation = 'relu',
 
         optim = 'adam',
         nesterov = False, # only used with SGD or Adam
@@ -465,8 +472,7 @@ if __name__ == '__main__':
         return inputs, outputs
 
     inputs, outputs = read_data("ml/cie_mlp_data.npz")
-    valid_data = read_data("ml/cie_mlp_vdata.npz")
-    valid_inputs, valid_outputs = valid_data
+    valid_inputs, valid_outputs = read_data("ml/cie_mlp_vdata.npz")
 
     # Our Test Model
 
@@ -520,8 +526,12 @@ if __name__ == '__main__':
     else:
         raise Exception('unknown optimizer', config.optim)
 
-    assert config.loss == 'mse', 'unknown loss function'
-    loss = SquaredHalved()
+    if config.loss == 'mse':
+        loss = Squared()
+    elif config.loss == 'mshe': # mushy
+        loss = SquaredHalved()
+    else:
+        raise Exception('unknown objective', config.loss)
 
     LR = config.LR
     LRprod = 0.5**(1/config.LR_halve_every)
@@ -532,12 +542,14 @@ if __name__ == '__main__':
         predicted = model.forward(inputs / x_scale)
         residual = predicted - outputs / y_scale
         err = loss.mean(residual)
-        print("train loss: {:10.6f}".format(err))
+        print("train loss: {:11.7f}".format(err))
+        print("improvement: {:+7.2f}%".format((0.0007031 / err - 1) * 100))
 
         predicted = model.forward(valid_inputs / x_scale)
         residual = predicted - valid_outputs / y_scale
         err = loss.mean(residual)
-        print("valid loss: {:10.6f}".format(err))
+        print("valid loss: {:11.7f}".format(err))
+        print("improvement: {:+7.2f}%".format((0.0007159 / err - 1) * 100))
 
     for i in range(config.restarts + 1):
         measure_loss()
@@ -554,6 +566,8 @@ if __name__ == '__main__':
             shuffled_inputs = inputs[indices] / x_scale
             shuffled_outputs = outputs[indices] / y_scale
 
+            optim.alpha = LR * LRprod**e
+
             cumsum_loss = 0
             for b in range(batch_count):
                 bi = b * config.batch_size
@@ -561,16 +575,9 @@ if __name__ == '__main__':
                 batch_outputs = shuffled_outputs[bi:bi+config.batch_size]
 
                 predicted = model.forward(batch_inputs)
-                dW = model.backward(np.ones_like(predicted))
-
                 residual = predicted - batch_outputs
-
-                # TODO: try something like this instead?
-                #err_dW = np.dot(loss.dmean(residual), np.expand_dims(dW, 0))
-                err_dW = loss.df(residual) * dW / len(residual)
-                err_dW = np.sum(err_dW, axis=0)
-                optim.alpha = LR * LRprod**e
-                optim.update(err_dW, model.W)
+                dW = model.backward(loss.dmean(residual))
+                optim.update(dW, model.W)
 
                 # note: we don't actually need this for training, only monitoring.
                 cumsum_loss += loss.mean(residual)
