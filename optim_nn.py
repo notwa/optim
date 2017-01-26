@@ -693,19 +693,9 @@ def run(program, args=[]):
     config.pprint()
 
     # toy CIE-2000 data
-    from ml.cie_mlp_data import rgbcompare, input_samples, output_samples, x_scale, y_scale
-
-    def read_data(fn):
-        data = np.load(fn)
-        try:
-            inputs, outputs = data['inputs'], data['outputs']
-        except KeyError:
-            # because i'm bad at video games.
-            inputs, outputs = data['arr_0'], data['arr_1']
-        return inputs, outputs
-
-    inputs, outputs = read_data("ml/cie_mlp_data.npz")
-    valid_inputs, valid_outputs = read_data("ml/cie_mlp_vdata.npz")
+    from ml.cie_mlp_data import rgbcompare, input_samples, output_samples, \
+                                inputs, outputs, valid_inputs, valid_outputs, \
+                                x_scale, y_scale
 
     # Our Test Model
 
