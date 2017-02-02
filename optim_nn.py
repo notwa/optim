@@ -776,10 +776,10 @@ def run(program, args=[]):
         log_fn = 'losses.npz',
 
         # multi-residual network parameters
-        res_width = 49,
-        res_depth = 1,
-        res_block = 4, # normally 2 for plain resnet
-        res_multi = 1, # normally 1 for plain resnet
+        res_width = 28,
+        res_depth = 2,
+        res_block = 3, # normally 2 for plain resnet
+        res_multi = 2, # normally 1 for plain resnet
 
         # style of resnet (order of layers, which layers, etc.)
         parallel_style = 'onelesssum',
@@ -793,19 +793,19 @@ def run(program, args=[]):
         learner = 'SGDR',
         learn = 1e-2,
         epochs = 24,
-        learn_halve_every = 16, # 12 might be ideal for SGDR?
         restarts = 2,
-        learn_restart_advance = 16,
+        learn_decay = 0.25, # only used with SGDR
+        learn_halve_every = 16, # unused with SGDR
+        learn_restart_advance = 16, # unused with SGDR
 
         # misc
         batch_size = 64,
         init = 'he_normal',
         loss = SomethingElse(),
         mloss = 'mse',
-        restart_optim = True, # restarts also reset internal state of optimizer
+        restart_optim = False, # restarts also reset internal state of optimizer
         unsafe = True, # aka gotta go fast mode
         train_compare = None,
-        #valid_compare = 0.0007159,
         valid_compare = 0.0000946,
     )
 
@@ -874,9 +874,9 @@ def run(program, args=[]):
     #
 
     if config.learner == 'SGDR':
-        decay = 0.5**(1/(config.epochs / config.learn_halve_every))
+        #decay = 0.5**(1/(config.epochs / config.learn_halve_every))
         learner = SGDR(optim, epochs=config.epochs, rate=config.learn,
-                       restart_decay=decay, restarts=config.restarts,
+                       restart_decay=config.learn_decay, restarts=config.restarts,
                        callback=rscb)
         # final learning rate isn't of interest here; it's gonna be close to 0.
     else:
