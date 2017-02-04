@@ -375,10 +375,11 @@ class Dense(Layer):
         self.coeffs.flat = self.weight_init(self.nW, ins, outs)
         self.biases.flat = 0
 
+        self.std = np.std(self.W)
+
     def F(self, X):
         self.X = X
-        Y = X.dot(self.coeffs) \
-          + self.biases
+        Y = X.dot(self.coeffs) + self.biases
         return Y
 
     def dF(self, dY):
@@ -396,8 +397,7 @@ class DenseOneLess(Dense):
     def F(self, X):
         np.fill_diagonal(self.coeffs, 0)
         self.X = X
-        Y = X.dot(self.coeffs) \
-          + self.biases
+        Y = X.dot(self.coeffs) + self.biases
         return Y
 
     def dF(self, dY):
@@ -546,7 +546,19 @@ class Ritual: # i'm just making up names at this point
     def derive(self, residual):
         return self.loss.dmean(residual)
 
-    def train_batched(self, model, inputs, outputs, batch_size, return_losses=False):
+    def learn(self, inputs, outputs):
+        predicted = self.model.forward(inputs)
+        residual = predicted - outputs
+        self.model.backward(self.derive(residual))
+        return residual
+
+    def update(self):
+        self.learner.optim.update(self.model.dW, self.model.W)
+
+    def prepare(self, model):
+        self.model = model
+
+    def train_batched(self, inputs, outputs, batch_size, return_losses=False):
         cumsum_loss = 0
         batch_count = inputs.shape[0] // batch_size
         losses = []
@@ -558,11 +570,8 @@ class Ritual: # i'm just making up names at this point
             if self.learner.per_batch:
                 self.learner.batch(b / batch_count)
 
-            predicted = model.forward(batch_inputs)
-            residual = predicted - batch_outputs
-
-            model.backward(self.derive(residual))
-            self.learner.optim.update(model.dW, model.W)
+            residual = self.learn(batch_inputs, batch_outputs)
+            self.update()
 
             batch_loss = self.measure(residual)
             if np.isnan(batch_loss):
@@ -575,6 +584,55 @@ class Ritual: # i'm just making up names at this point
             return avg_loss, losses
         else:
             return avg_loss
+
+def stochastic_multiply(W, gamma=0.5, allow_negation=True):
+    # paper: https://arxiv.org/abs/1606.01981
+    assert W.ndim == 1, W.ndim
+    assert 0 < gamma < 1, gamma
+    size = len(W)
+    alpha = np.max(np.abs(W))
+    # NOTE: numpy gives [low, high) but the paper advocates [low, high]
+    mult = np.random.uniform(gamma, 1/gamma, size=size)
+    if allow_negation: # TODO: verify this is correct. seems to wreak havok.
+        prob = (W / alpha + 1) / 2
+        samples = np.random.random_sample(size=size)
+        mult *= np.where(samples < prob, 1, -1)
+    np.multiply(W, mult, out=W)
+
+class StochMRitual(Ritual):
+    # paper: https://arxiv.org/abs/1606.01981
+    # this probably doesn't make sense for regression problems,
+    # let alone small models, but here it is anyway!
+
+    def __init__(self, learner=None, loss=None, mloss=None, gamma=0.5):
+        super().__init__(learner, loss, mloss)
+        self.gamma = nf(gamma)
+
+    def prepare(self, model):
+        self.W = np.copy(model.W)
+        super().prepare(model)
+
+    def learn(self, inputs, outputs):
+        # an experiment:
+        #assert self.learner.rate < 10, self.learner.rate
+        #self.gamma = 1 - 1/2**(1 - np.log10(self.learner.rate))
+
+        self.W[:] = self.model.W
+        for layer in self.model.ordered_nodes:
+            if isinstance(layer, Dense):
+                stochastic_multiply(layer.coeffs.ravel(), gamma=self.gamma,
+                                    allow_negation=True)
+        residual = super().learn(inputs, outputs)
+        self.model.W[:] = self.W
+        return residual
+
+    def update(self):
+        super().update()
+        f = 0.5
+        for layer in self.model.ordered_nodes:
+            if isinstance(layer, Dense):
+                np.clip(layer.W, -layer.std * f, layer.std * f, out=layer.W)
+    #           np.clip(layer.W, -1, 1, out=layer.W)
 
 class Learner:
     per_batch = False
@@ -801,12 +859,14 @@ def run(program, args=[]):
         # misc
         batch_size = 64,
         init = 'he_normal',
-        loss = SomethingElse(),
+        loss = 'msee',
         mloss = 'mse',
         restart_optim = False, # restarts also reset internal state of optimizer
         unsafe = True, # aka gotta go fast mode
-        train_compare = None,
-        valid_compare = 0.0000946,
+        train_compare = 0.0000508,
+        valid_compare = 0.0000678,
+
+        ritual = None,
     )
 
     config.pprint()
@@ -874,7 +934,6 @@ def run(program, args=[]):
     #
 
     if config.learner == 'SGDR':
-        #decay = 0.5**(1/(config.epochs / config.learn_halve_every))
         learner = SGDR(optim, epochs=config.epochs, rate=config.learn,
                        restart_decay=config.learn_decay, restarts=config.restarts,
                        callback=rscb)
@@ -895,12 +954,19 @@ def run(program, args=[]):
             return Squared()
         elif maybe_name == 'mshe': # mushy
             return SquaredHalved()
+        elif maybe_name == 'msee':
+            return SomethingElse()
         raise Exception('unknown objective', maybe_name)
 
     loss = lookup_loss(config.loss)
     mloss = lookup_loss(config.mloss) if config.mloss else loss
 
-    ritual = Ritual(learner=learner, loss=loss, mloss=mloss)
+    if config.ritual == None:
+        ritual = Ritual(learner=learner, loss=loss, mloss=mloss)
+    elif config.ritual == 'stochm':
+        ritual = StochMRitual(learner=learner, loss=loss, mloss=mloss)
+    else:
+        raise Exception('unknown ritual', config.ritual)
 
     # Training
 
@@ -931,13 +997,14 @@ def run(program, args=[]):
 
     assert inputs.shape[0] % config.batch_size == 0, \
            "inputs is not evenly divisible by batch_size" # TODO: lift this restriction
+    ritual.prepare(model)
     while learner.next():
         indices = np.arange(inputs.shape[0])
         np.random.shuffle(indices)
         shuffled_inputs = inputs[indices] / x_scale
         shuffled_outputs = outputs[indices] / y_scale
 
-        avg_loss, losses = ritual.train_batched(model,
+        avg_loss, losses = ritual.train_batched(
             shuffled_inputs, shuffled_outputs,
             config.batch_size,
             return_losses=True)
