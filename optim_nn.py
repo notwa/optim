@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 
+# external packages required for full functionality:
+# numpy scipy h5py sklearn dotmap
+
 import numpy as np
 # ugly shorthand:
 nf = np.float32
@@ -49,6 +52,13 @@ class SquaredHalved(Loss):
 
     def df(self, r):
         return r
+
+class Absolute(Loss):
+    def f(self, r):
+        return np.abs(r)
+
+    def df(self, r):
+        return np.sign(r)
 
 class SomethingElse(Loss):
     # generalizes Absolute and SquaredHalved (|dx| = 1)
@@ -650,6 +660,14 @@ class NoisyRitual(Ritual):
         self.gradient_noise = nf(gradient_noise)
         super().__init__(learner, loss, mloss)
 
+    def learn(self, inputs, outputs):
+        # this is pretty crude
+        s = self.input_noise
+        noisy_inputs =   inputs + np.random.normal(0, s, size=inputs.shape)
+        s = self.output_noise
+        noisy_outputs = outputs + np.random.normal(0, s, size=outputs.shape)
+        return super().learn(noisy_inputs, noisy_outputs)
+
     def update(self):
         # gradient noise paper: https://arxiv.org/abs/1511.06807
         if self.gradient_noise > 0:
@@ -867,6 +885,74 @@ def multiresnet(x, width, depth, block=2, multi=1,
 inits = dict(he_normal=init_he_normal, he_uniform=init_he_uniform)
 activations = dict(sigmoid=Sigmoid, tanh=Tanh, relu=Relu, elu=Elu, gelu=GeluApprox)
 
+def normalize_data(data, mean=None, std=None):
+    # in-place
+    if mean is None or std is None:
+        mean = np.mean(data, axis=0)
+        std  =  np.std(data, axis=0)
+        # TODO: construct function call string for copy-paste convenience
+        print('mean:', mean)
+        print('std: ', std)
+        import sys
+        sys.exit(1)
+    data -= mean
+    data /= std
+
+def toy_data(train_samples, valid_samples, problem=2):
+    total_samples = train_samples + valid_samples
+
+    if problem == 1:
+        from sklearn.datasets import make_friedman1
+        inputs, outputs = make_friedman1(total_samples)
+        outputs = np.expand_dims(outputs, -1)
+
+        normalize_data(inputs,
+          0.5,
+          1/np.sqrt(12))
+
+        normalize_data(outputs,
+          14.4,
+          4.9)
+
+    elif problem == 2:
+        from sklearn.datasets import make_friedman2
+        inputs, outputs = make_friedman2(total_samples)
+        outputs = np.expand_dims(outputs, -1)
+
+        normalize_data(inputs,
+          [5.00e+01, 9.45e+02, 5.01e-01, 5.98e+00],
+          [2.89e+01, 4.72e+02, 2.89e-01, 2.87e+00])
+
+        normalize_data(outputs,
+          [482],
+          [380])
+
+    elif problem == 3:
+        from sklearn.datasets import make_friedman3
+        inputs, outputs = make_friedman3(total_samples)
+        outputs = np.expand_dims(outputs, -1)
+
+        normalize_data(inputs,
+          [4.98e+01, 9.45e+02, 4.99e-01, 6.02e+00],
+          [2.88e+01, 4.73e+02, 2.90e-01, 2.87e+00])
+
+        normalize_data(outputs,
+          [1.32327931],
+          [0.31776295])
+
+    else:
+        raise Exception("unknown toy data set", problem)
+
+    # split off a validation set
+    indices = np.arange(inputs.shape[0])
+    np.random.shuffle(indices)
+    valid_inputs  =  inputs[indices][-valid_samples:]
+    valid_outputs = outputs[indices][-valid_samples:]
+    inputs  =  inputs[indices][:-valid_samples]
+    outputs = outputs[indices][:-valid_samples]
+
+    return (inputs, outputs), (valid_inputs, valid_outputs)
+
 def run(program, args=[]):
     import sys
     lament = lambda *args, **kwargs: print(*args, file=sys.stderr, **kwargs)
@@ -894,54 +980,61 @@ def run(program, args=[]):
         optim = 'adam',
         nesterov = False, # only used with SGD or Adam
         momentum = 0.50, # only used with SGD
+        batch_size = 64,
 
         # learning parameters
         learner = 'sgdr',
         learn = 1e-2,
         learn_halve_every = 16, # unused with SGDR
         learn_restart_advance = 16, # unused with SGDR
-        epochs = 12,
+        epochs = 24,
         restarts = 2,
-        restart_decay = 1, # only used with SGDR
+        restart_decay = 0.25, # only used with SGDR
         expando = lambda i: i + 1,
 
         # misc
-        batch_size = 64,
         init = 'he_normal',
-        loss = 'msee',
+        loss = 'mse',
         mloss = 'mse',
-        restart_optim = False, # restarts also reset internal state of optimizer
-        unsafe = True, # aka gotta go fast mode
-        train_compare = 0.0000508,
-        valid_compare = 0.0000678,
-
         ritual = 'default',
+        restart_optim = False, # restarts also reset internal state of optimizer
+
+        problem = 3,
+        # best results for ~10,000 parameters
+        # (keep these paired; update both at the same time!)
+        train_compare = 1.854613e-05,
+        valid_compare = 1.623881e-05,
+
+        unsafe = True, # aka gotta go fast mode
     )
 
-    for k in ['parallel_style', 'optim', 'learner', 'ritual']:
+    for k in ['parallel_style', 'activation', 'optim', 'learner', 'init', 'loss', 'mloss', 'ritual']:
         config[k] = config[k].lower()
 
-    #config.pprint()
+    config.pprint()
 
-    # toy CIE-2000 data
-    from ml.cie_mlp_data import rgbcompare, input_samples, output_samples, \
-                                inputs, outputs, valid_inputs, valid_outputs, \
-                                x_scale, y_scale
+    # toy data
+    # (our model is probably complete overkill for this, so TODO: better data)
+
+    (inputs, outputs), (valid_inputs, valid_outputs) = \
+      toy_data(2**14, 2**11, problem=config.problem)
+    input_features  =  inputs.shape[-1]
+    output_features = outputs.shape[-1]
 
     # Our Test Model
 
     init = inits[config.init]
     activation = activations[config.activation]
 
-    x = Input(shape=(input_samples,))
+    x = Input(shape=(input_features,))
     y = x
     y = multiresnet(y,
                     config.res_width, config.res_depth,
                     config.res_block, config.res_multi,
                     activation=activation, init=init,
                     style=config.parallel_style)
-    if y.output_shape[0] != output_samples:
-        y = y.feed(Dense(output_samples, init))
+    if y.output_shape[0] != output_features:
+        y = y.feed(Dense(output_features, init))
 
     model = Model(x, y, unsafe=config.unsafe)
 
@@ -991,7 +1084,7 @@ def run(program, args=[]):
                        restart_decay=config.restart_decay, restarts=config.restarts,
                        callback=rscb, expando=expando)
         # final learning rate isn't of interest here; it's gonna be close to 0.
-        log('total epochs:', learner.epochs)
+        log('total epochs', learner.epochs)
     elif config.learner == 'anneal':
         learner = AnnealingLearner(optim, epochs=config.epochs, rate=config.learn,
                                    halve_every=config.learn_halve_every)
@@ -1016,6 +1109,8 @@ def run(program, args=[]):
             return Squared()
         elif maybe_name == 'mshe': # mushy
             return SquaredHalved()
+        elif maybe_name == 'mae':
+            return Absolute()
         elif maybe_name == 'msee':
             return SomethingElse()
         raise Exception('unknown objective', maybe_name)
@@ -1029,7 +1124,8 @@ def run(program, args=[]):
         ritual = StochMRitual(learner=learner, loss=loss, mloss=mloss)
     elif config.ritual == 'noisy':
         ritual = NoisyRitual(learner=learner, loss=loss, mloss=mloss,
-                             gradient_noise=0.01)
+                             input_noise=1e-1, output_noise=1e-2,
+                             gradient_noise=2e-7)
     else:
         raise Exception('unknown ritual', config.ritual)
 
@@ -1044,16 +1140,18 @@ def run(program, args=[]):
             predicted = model.forward(inputs)
             residual = predicted - outputs
             err = ritual.measure(residual)
-            log(name + " loss", "{:11.7f}".format(err))
+            log(name + " loss", "{:12.6e}".format(err))
+            # TODO: print logarithmic difference as it might be more meaningful
+            # (fewer results stuck around -99%)
             if comparison:
                 log("improvement", "{:+7.2f}%".format((comparison / err - 1) * 100))
             return err
 
         train_err = print_error("train",
-                                inputs / x_scale, outputs / y_scale,
+                                inputs, outputs,
                                 config.train_compare)
         valid_err = print_error("valid",
-                                valid_inputs / x_scale, valid_outputs / y_scale,
+                                valid_inputs, valid_outputs,
                                 config.valid_compare)
         train_losses.append(train_err)
         valid_losses.append(valid_err)
@@ -1066,8 +1164,8 @@ def run(program, args=[]):
     while learner.next():
         indices = np.arange(inputs.shape[0])
         np.random.shuffle(indices)
-        shuffled_inputs = inputs[indices] / x_scale
-        shuffled_outputs = outputs[indices] / y_scale
+        shuffled_inputs = inputs[indices]
+        shuffled_outputs = outputs[indices]
 
         avg_loss, losses = ritual.train_batched(
             shuffled_inputs, shuffled_outputs,
@@ -1077,7 +1175,7 @@ def run(program, args=[]):
 
         #log("learning rate", "{:10.8f}".format(learner.rate))
         #log("average loss", "{:11.7f}".format(avg_loss))
-        fmt = "epoch {:4.0f}, rate {:10.8f}, loss {:11.7f}"
+        fmt = "epoch {:4.0f}, rate {:10.8f}, loss {:12.6e}"
         log("info", fmt.format(learner.epoch + 1, learner.rate, avg_loss))
 
     measure_error()
@@ -1087,15 +1185,7 @@ def run(program, args=[]):
         model.save_weights(config.fn_save, overwrite=True)
 
     # Evaluation
-
-    # this is just an example/test of how to predict a single output;
-    # it doesn't measure the quality of the network or anything.
-    a = (192, 128, 64)
-    b = (64, 128, 192)
-    X = np.expand_dims(np.hstack((a, b)), 0) / x_scale
-    P = model.forward(X) * y_scale
-    log("truth", rgbcompare(a, b))
-    log("network", np.squeeze(P))
+    # TODO: write this portion again
 
     if config.log_fn is not None:
         np.savez_compressed(config.log_fn,
