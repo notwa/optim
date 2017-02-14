@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 
+# BIG TODO: ensure numpy isn't upcasting to float64 *anywhere*.
+#           this is gonna take some work.
+
 # external packages required for full functionality:
 # numpy scipy h5py sklearn dotmap
 
@@ -24,7 +27,7 @@ class SquaredHalved(Loss):
         return r
 
 class SomethingElse(Loss):
-    # generalizes Absolute and SquaredHalved (|dx| = 1)
+    # generalizes Absolute and SquaredHalved
     # plot: https://www.desmos.com/calculator/fagjg9vuz7
     def __init__(self, a=4/3):
         assert 1 <= a <= 2, "parameter out of range"
@@ -337,7 +340,15 @@ def model_from_config(config, input_features, output_features, callbacks):
 
     if config.optim == 'adam':
         assert not config.nesterov, "unimplemented"
-        optim = Adam()
+        d1 = config.optim_decay1 if 'optim_decay1' in config else 9.5
+        d2 = config.optim_decay2 if 'optim_decay2' in config else 999.5
+        b1 = np.exp(-1/d1)
+        b2 = np.exp(-1/d2)
+        optim = Adam(b1=b1, b1_t=b1, b2=b2, b2_t=b2)
+    elif config.optim in ('rms', 'rmsprop'):
+        d2 = config.optim_decay2 if 'optim_decay2' in config else 99.5
+        mu = np.exp(-1/d2)
+        optim = RMSprop(mu=mu)
     elif config.optim == 'sgd':
         if config.momentum != 0:
             optim = Momentum(mu=config.momentum, nesterov=config.nesterov)
@@ -413,7 +424,9 @@ def model_from_config(config, input_features, output_features, callbacks):
 
 def run(program, args=[]):
 
-    # Config
+    np.random.seed(42069)
+
+    # Config {{{2
 
     from dotmap import DotMap
     config = DotMap(
@@ -432,6 +445,8 @@ def run(program, args=[]):
         activation = 'gelu',
 
         optim = 'adam',
+        optim_decay1 = 2,   # given in epochs (optional)
+        optim_decay2 = 100, # given in epochs (optional)
         nesterov = False, # only used with SGD or Adam
         momentum = 0.50, # only used with SGD
         batch_size = 64,
@@ -467,7 +482,7 @@ def run(program, args=[]):
 
     config.pprint()
 
-    # toy data
+    # Toy Data {{{2
     # (our model is probably complete overkill for this, so TODO: better data)
 
     (inputs, outputs), (valid_inputs, valid_outputs) = \
@@ -493,7 +508,7 @@ def run(program, args=[]):
                 print(str(node)+sep+('\n'+str(node)+sep).join(children))
     log('parameters', model.param_count)
 
-    # Training
+    # Training {{{2
 
     batch_losses = []
     train_losses = []
@@ -550,9 +565,6 @@ def run(program, args=[]):
         log('saving weights', config.fn_save)
         model.save_weights(config.fn_save, overwrite=True)
 
-    # Evaluation
-    # TODO: write this portion again
-
     if config.log_fn is not None:
         log('saving losses', config.log_fn)
         np.savez_compressed(config.log_fn,
@@ -560,7 +572,12 @@ def run(program, args=[]):
                             train_losses=nfa(train_losses),
                             valid_losses=nfa(valid_losses))
 
+    # Evaluation {{{2
+    # TODO: write this portion again
+
     return 0
+
+# do main {{{1
 
 if __name__ == '__main__':
     import sys

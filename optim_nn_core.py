@@ -27,6 +27,8 @@ def init_he_uniform(size, ins, outs):
 # Loss functions {{{1
 
 class Loss:
+    per_batch = False
+
     def mean(self, r):
         return np.average(self.f(r))
 
@@ -91,7 +93,53 @@ class Momentum(Optimizer):
         else:
             return V
 
+class RMSprop(Optimizer):
+    # RMSprop generalizes* Adagrad, etc.
+
+    # * RMSprop == Adagrad when
+    #   RMSprop.mu == 1
+
+    def __init__(self, alpha=0.0001, mu=0.99, eps=1e-8):
+        self.alpha = nf(alpha) # learning rate
+        self.mu = nf(mu) # decay term
+        self.eps = nf(eps)
+
+        # one might consider the following equation when specifying mu:
+        # mu = e**(-1/t)
+        # default: t = -1/ln(0.99) = ~99.5
+        # therefore the default of mu=0.99 means
+        # an input decays to 1/e its original amplitude over 99.5 epochs.
+        # (this is from DSP, so how relevant it is in SGD is debatable)
+
+        self.reset()
+
+    def reset(self):
+        self.g = None
+
+    def compute(self, dW, W):
+        if self.g is None:
+            self.g = np.zeros_like(dW)
+
+        # basically apply a first-order low-pass filter to delta squared
+        self.g[:] = self.mu * self.g + (1 - self.mu) * dW * dW
+        # equivalent (though numerically different?):
+        #self.g += (dW * dW - self.g) * (1 - self.mu)
+
+        # finally sqrt it to complete the running root-mean-square approximation
+        return -self.alpha * dW / np.sqrt(self.g + self.eps)
+
 class Adam(Optimizer):
+    # Adam generalizes* RMSprop, and
+    # adds a decay term to the regular (non-squared) delta, and
+    # does some decay-gain voodoo. (i guess it's compensating
+    # for the filtered deltas starting from zero)
+
+    # * Adam == RMSprop when
+    #   Adam.b1 == 0
+    #   Adam.b2 == RMSprop.mu
+    #   Adam.b1_t == 0
+    #   Adam.b2_t == 0
+
     def __init__(self, alpha=0.001, b1=0.9, b2=0.999, b1_t=0.9, b2_t=0.999, eps=1e-8):
         self.alpha = nf(alpha) # learning rate
         self.b1 = nf(b1) # decay term
@@ -110,14 +158,15 @@ class Adam(Optimizer):
 
     def compute(self, dW, W):
         if self.mt is None:
-            self.mt = np.zeros_like(W)
+            self.mt = np.zeros_like(dW)
         if self.vt is None:
-            self.vt = np.zeros_like(W)
+            self.vt = np.zeros_like(dW)
 
-        # decay
+        # decay gain
         self.b1_t *= self.b1
         self.b2_t *= self.b2
 
+        # filter
         self.mt[:] = self.b1 * self.mt + (1 - self.b1) * dW
         self.vt[:] = self.b2 * self.vt + (1 - self.b2) * dW * dW
 
