@@ -7,6 +7,7 @@
 # numpy scipy h5py sklearn dotmap
 
 from optim_nn_core import *
+from optim_nn_core import _check, _f
 
 import sys
 lament = lambda *args, **kwargs: print(*args, file=sys.stderr, **kwargs)
@@ -31,9 +32,9 @@ class SomethingElse(Loss):
     # plot: https://www.desmos.com/calculator/fagjg9vuz7
     def __init__(self, a=4/3):
         assert 1 <= a <= 2, "parameter out of range"
-        self.a = nf(a / 2)
-        self.b = nf(2 / a)
-        self.c = nf(2 / a - 1)
+        self.a = _f(a / 2)
+        self.b = _f(2 / a)
+        self.c = _f(2 / a - 1)
 
     def f(self, r):
         return self.a * np.abs(r)**self.b
@@ -49,7 +50,7 @@ class LayerNorm(Layer):
 
     def __init__(self, eps=1e-3, axis=-1):
         super().__init__()
-        self.eps = nf(eps)
+        self.eps = _f(eps)
         self.axis = int(axis)
 
     def F(self, X):
@@ -96,7 +97,7 @@ class StochMRitual(Ritual):
 
     def __init__(self, learner=None, loss=None, mloss=None, gamma=0.5):
         super().__init__(learner, loss, mloss)
-        self.gamma = nf(gamma)
+        self.gamma = _f(gamma)
 
     def prepare(self, model):
         self.W = np.copy(model.W)
@@ -127,9 +128,9 @@ class StochMRitual(Ritual):
 class NoisyRitual(Ritual):
     def __init__(self, learner=None, loss=None, mloss=None,
                  input_noise=0, output_noise=0, gradient_noise=0):
-        self.input_noise = nf(input_noise) # TODO: implement
-        self.output_noise = nf(output_noise) # TODO: implement
-        self.gradient_noise = nf(gradient_noise)
+        self.input_noise = _f(input_noise)
+        self.output_noise = _f(output_noise)
+        self.gradient_noise = _f(gradient_noise)
         super().__init__(learner, loss, mloss)
 
     def learn(self, inputs, outputs):
@@ -261,6 +262,7 @@ def toy_data(train_samples, valid_samples, problem=2):
     if problem == 1:
         from sklearn.datasets import make_friedman1
         inputs, outputs = make_friedman1(total_samples)
+        inputs, outputs = _f(inputs), _f(outputs)
         outputs = np.expand_dims(outputs, -1)
 
         normalize_data(inputs,
@@ -274,6 +276,7 @@ def toy_data(train_samples, valid_samples, problem=2):
     elif problem == 2:
         from sklearn.datasets import make_friedman2
         inputs, outputs = make_friedman2(total_samples)
+        inputs, outputs = _f(inputs), _f(outputs)
         outputs = np.expand_dims(outputs, -1)
 
         normalize_data(inputs,
@@ -287,6 +290,7 @@ def toy_data(train_samples, valid_samples, problem=2):
     elif problem == 3:
         from sklearn.datasets import make_friedman3
         inputs, outputs = make_friedman3(total_samples)
+        inputs, outputs = _f(inputs), _f(outputs)
         outputs = np.expand_dims(outputs, -1)
 
         normalize_data(inputs,
@@ -463,7 +467,7 @@ def run(program, args=[]):
 
         # misc
         init = 'he_normal',
-        loss = 'mse',
+        loss = 'msee',
         mloss = 'mse',
         ritual = 'default',
         restart_optim = False, # restarts also reset internal state of optimizer
@@ -568,9 +572,9 @@ def run(program, args=[]):
     if config.log_fn is not None:
         log('saving losses', config.log_fn)
         np.savez_compressed(config.log_fn,
-                            batch_losses=nfa(batch_losses),
-                            train_losses=nfa(train_losses),
-                            valid_losses=nfa(valid_losses))
+                            batch_losses=np.array(batch_losses, dtype=_f),
+                            train_losses=np.array(train_losses, dtype=_f),
+                            valid_losses=np.array(valid_losses, dtype=_f))
 
     # Evaluation {{{2
     # TODO: write this portion again

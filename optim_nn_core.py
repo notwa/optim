@@ -1,9 +1,5 @@
 import numpy as np
-# ugly shorthand:
-nf = np.float32
-nfa = lambda x: np.array(x, dtype=nf)
-ni = np.int
-nia = lambda x: np.array(x, dtype=ni)
+_f = np.float32
 
 # just for speed, not strictly essential:
 from scipy.special import expit as sigmoid
@@ -11,6 +7,19 @@ from scipy.special import expit as sigmoid
 # used for numbering layers like Keras:
 from collections import defaultdict
 _layer_counters = defaultdict(lambda: 0)
+
+def _check(a):
+    assert isinstance(a, np.ndarray) or type(a) == _f, type(a)
+    assert a.dtype == _f, a.dtype
+    return a
+
+_0 = _f(0)
+_1 = _f(1)
+_2 = _f(2)
+_inv2 = _f(1/2)
+_sqrt2 = _f(np.sqrt(2))
+_invsqrt2 = _f(1/np.sqrt(2))
+_pi = _f(np.pi)
 
 # Initializations {{{1
 
@@ -54,7 +63,7 @@ class Absolute(Loss):
 
 class Optimizer:
     def __init__(self, alpha=0.1):
-        self.alpha = nf(alpha)
+        self.alpha = _f(alpha)
         self.reset()
 
     def reset(self):
@@ -71,9 +80,9 @@ class Optimizer:
 
 class Momentum(Optimizer):
     def __init__(self, alpha=0.01, lamb=0, mu=0.9, nesterov=False):
-        self.alpha = np.asfarray(alpha) # learning rate
-        self.lamb = np.asfarray(lamb) # weight decay
-        self.mu = np.asfarray(mu) # momentum
+        self.alpha = _f(alpha) # learning rate
+        self.lamb = _f(lamb) # weight decay
+        self.mu = _f(mu) # momentum
         self.nesterov = bool(nesterov)
 
         self.reset()
@@ -100,9 +109,9 @@ class RMSprop(Optimizer):
     #   RMSprop.mu == 1
 
     def __init__(self, alpha=0.0001, mu=0.99, eps=1e-8):
-        self.alpha = nf(alpha) # learning rate
-        self.mu = nf(mu) # decay term
-        self.eps = nf(eps)
+        self.alpha = _f(alpha) # learning rate
+        self.mu = _f(mu) # decay term
+        self.eps = _f(eps)
 
         # one might consider the following equation when specifying mu:
         # mu = e**(-1/t)
@@ -141,12 +150,12 @@ class Adam(Optimizer):
     #   Adam.b2_t == 0
 
     def __init__(self, alpha=0.001, b1=0.9, b2=0.999, b1_t=0.9, b2_t=0.999, eps=1e-8):
-        self.alpha = nf(alpha) # learning rate
-        self.b1 = nf(b1) # decay term
-        self.b2 = nf(b2) # decay term
-        self.b1_t_default = nf(b1_t) # decay term power t
-        self.b2_t_default = nf(b2_t) # decay term power t
-        self.eps = nf(eps)
+        self.alpha = _f(alpha) # learning rate
+        self.b1 = _f(b1) # decay term
+        self.b2 = _f(b2) # decay term
+        self.b1_t_default = _f(b1_t) # decay term power t
+        self.b2_t_default = _f(b2_t) # decay term power t
+        self.eps = _f(eps)
 
         self.reset()
 
@@ -317,8 +326,8 @@ class Input(Layer):
 class Affine(Layer):
     def __init__(self, a=1, b=0):
         super().__init__()
-        self.a = nf(a)
-        self.b = nf(b)
+        self.a = _f(a)
+        self.b = _f(b)
 
     def F(self, X):
         return self.a * X + self.b
@@ -355,7 +364,7 @@ class Elu(Layer):
 
     def __init__(self, alpha=1):
         super().__init__()
-        self.alpha = nf(alpha)
+        self.alpha = _f(alpha)
 
     def F(self, X):
         self.cond = X >= 0
@@ -382,7 +391,7 @@ class GeluApprox(Layer):
 class Dense(Layer):
     def __init__(self, dim, init=init_he_uniform):
         super().__init__()
-        self.dim = ni(dim)
+        self.dim = int(dim)
         self.output_shape = (dim,)
         self.weight_init = init
         self.size = None
@@ -459,8 +468,8 @@ class Model:
         for node in self.ordered_nodes:
             if node.size is not None:
                 self.param_count += node.size
-        self.W  = np.zeros(self.param_count, dtype=nf)
-        self.dW = np.zeros(self.param_count, dtype=nf)
+        self.W  = np.zeros(self.param_count, dtype=_f)
+        self.dW = np.zeros(self.param_count, dtype=_f)
 
         offset = 0
         for node in self.ordered_nodes:
@@ -510,7 +519,7 @@ class Model:
         weights = {}
         def visitor(name, obj):
             if isinstance(obj, h5py.Dataset):
-                weights[name.split('/')[-1]] = nfa(obj[:])
+                weights[name.split('/')[-1]] = np.array(obj[:], dtype=_f)
         f.visititems(visitor)
         f.close()
 
@@ -532,9 +541,9 @@ class Model:
             b_name = "dense_{}".format(b)
             # TODO: write a Dense method instead of assigning directly
             grp = f.create_group(b_name)
-            data = grp.create_dataset(b_name+'_W', denses[a].coeffs.shape, dtype=nf)
+            data = grp.create_dataset(b_name+'_W', denses[a].coeffs.shape, dtype=_f)
             data[:] = denses[a].coeffs
-            data = grp.create_dataset(b_name+'_b', denses[a].biases.shape, dtype=nf)
+            data = grp.create_dataset(b_name+'_b', denses[a].biases.shape, dtype=_f)
             data[:] = denses[a].biases
 
         f.close()
@@ -572,7 +581,7 @@ class Ritual: # i'm just making up names at this point
 
     def train_batched(self, inputs, outputs, batch_size, return_losses=False):
         self.en += 1
-        cumsum_loss = 0
+        cumsum_loss = _0
         batch_count = inputs.shape[0] // batch_size
         losses = []
         for b in range(batch_count):
@@ -593,7 +602,7 @@ class Ritual: # i'm just making up names at this point
             cumsum_loss += batch_loss
             if return_losses:
                 losses.append(batch_loss)
-        avg_loss = cumsum_loss / batch_count
+        avg_loss = cumsum_loss / _f(batch_count)
         if return_losses:
             return avg_loss, losses
         else:
@@ -607,7 +616,7 @@ class Learner:
     def __init__(self, optim, epochs=100, rate=None):
         assert isinstance(optim, Optimizer)
         self.optim = optim
-        self.start_rate = optim.alpha if rate is None else float(rate)
+        self.start_rate = optim.alpha if rate is None else _f(rate)
         self.epochs = int(epochs)
         self.reset()
 
@@ -661,8 +670,8 @@ class Learner:
 
 class AnnealingLearner(Learner):
     def __init__(self, optim, epochs=100, rate=None, halve_every=10):
-        self.halve_every = float(halve_every)
-        self.anneal = 0.5**(1/self.halve_every)
+        self.halve_every = _f(halve_every)
+        self.anneal = _f(0.5**(1/self.halve_every))
         super().__init__(optim, epochs, rate)
 
     def rate_at(self, epoch):
@@ -670,7 +679,7 @@ class AnnealingLearner(Learner):
 
 def cosmod(x):
     # plot: https://www.desmos.com/calculator/hlgqmyswy2
-    return (1 + np.cos((x % 1) * np.pi)) / 2
+    return (_1 + np.cos((x % _1) * _pi)) * _inv2
 
 class SGDR(Learner):
     # Stochastic Gradient Descent with Restarts
@@ -683,7 +692,7 @@ class SGDR(Learner):
                  restarts=0, restart_decay=0.5, callback=None,
                  expando=None):
         self.restart_epochs = int(epochs)
-        self.decay = float(restart_decay)
+        self.decay = _f(restart_decay)
         self.restarts = int(restarts)
         self.restart_callback = callback
         # TODO: rename expando to something not insane
@@ -708,8 +717,8 @@ class SGDR(Learner):
 
     def rate_at(self, epoch):
         restart, sub_epoch, next_restart = self.split_num(epoch)
-        x = sub_epoch / next_restart
-        return self.start_rate * self.decay**restart * cosmod(x)
+        x = _f(sub_epoch) / _f(next_restart)
+        return self.start_rate * self.decay**_f(restart) * cosmod(x)
 
     def next(self):
         if not super().next():
