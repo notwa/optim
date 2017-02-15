@@ -105,6 +105,7 @@ class Momentum(Optimizer):
 class RMSprop(Optimizer):
     # RMSprop generalizes* Adagrad, etc.
 
+    # TODO: verify this is correct:
     # * RMSprop == Adagrad when
     #   RMSprop.mu == 1
 

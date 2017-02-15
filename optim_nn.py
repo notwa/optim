@@ -249,29 +249,35 @@ def normalize_data(data, mean=None, std=None):
         mean = np.mean(data, axis=0)
         std  =  np.std(data, axis=0)
         # TODO: construct function call string for copy-paste convenience
-        print('mean:', mean)
-        print('std: ', std)
-        import sys
+        lament('mean:', mean)
+        lament('std: ', std)
         sys.exit(1)
-    data -= mean
-    data /= std
+    data -= _f(mean)
+    data /= _f(std)
 
 def toy_data(train_samples, valid_samples, problem=2):
     total_samples = train_samples + valid_samples
 
-    if problem == 1:
+    if problem == 0:
+        from ml.cie_mlp_data import rgbcompare, input_samples, output_samples, \
+                                    inputs, outputs, valid_inputs, valid_outputs, \
+                                    x_scale, y_scale
+        inputs, outputs = _f(inputs), _f(outputs)
+        valid_inputs, valid_outputs = _f(valid_inputs), _f(valid_outputs)
+
+        normalize_data(inputs, 127.5, 73.9)
+        normalize_data(outputs, 44.8, 21.7)
+        normalize_data(valid_inputs, 127.5, 73.9)
+        normalize_data(valid_outputs, 44.8, 21.7)
+
+    elif problem == 1:
         from sklearn.datasets import make_friedman1
         inputs, outputs = make_friedman1(total_samples)
         inputs, outputs = _f(inputs), _f(outputs)
         outputs = np.expand_dims(outputs, -1)
 
-        normalize_data(inputs,
-          0.5,
-          1/np.sqrt(12))
-
-        normalize_data(outputs,
-          14.4,
-          4.9)
+        normalize_data(inputs, 0.5, 1/np.sqrt(12))
+        normalize_data(outputs, 14.4, 4.9)
 
     elif problem == 2:
         from sklearn.datasets import make_friedman2
@@ -283,9 +289,7 @@ def toy_data(train_samples, valid_samples, problem=2):
           [5.00e+01, 9.45e+02, 5.01e-01, 5.98e+00],
           [2.89e+01, 4.72e+02, 2.89e-01, 2.87e+00])
 
-        normalize_data(outputs,
-          [482],
-          [380])
+        normalize_data(outputs, [482], [380])
 
     elif problem == 3:
         from sklearn.datasets import make_friedman3
@@ -297,20 +301,19 @@ def toy_data(train_samples, valid_samples, problem=2):
           [4.98e+01, 9.45e+02, 4.99e-01, 6.02e+00],
           [2.88e+01, 4.73e+02, 2.90e-01, 2.87e+00])
 
-        normalize_data(outputs,
-          [1.32327931],
-          [0.31776295])
+        normalize_data(outputs, [1.32327931], [0.31776295])
 
     else:
         raise Exception("unknown toy data set", problem)
 
-    # split off a validation set
-    indices = np.arange(inputs.shape[0])
-    np.random.shuffle(indices)
-    valid_inputs  =  inputs[indices][-valid_samples:]
-    valid_outputs = outputs[indices][-valid_samples:]
-    inputs  =  inputs[indices][:-valid_samples]
-    outputs = outputs[indices][:-valid_samples]
+    if problem != 0:
+        # split off a validation set
+        indices = np.arange(inputs.shape[0])
+        np.random.shuffle(indices)
+        valid_inputs  =  inputs[indices][-valid_samples:]
+        valid_outputs = outputs[indices][-valid_samples:]
+        inputs  =  inputs[indices][:-valid_samples]
+        outputs = outputs[indices][:-valid_samples]
 
     return (inputs, outputs), (valid_inputs, valid_outputs)
 
@@ -451,15 +454,13 @@ def run(program, args=[]):
         optim = 'adam',
         optim_decay1 = 2,   # given in epochs (optional)
         optim_decay2 = 100, # given in epochs (optional)
-        nesterov = False, # only used with SGD or Adam
         momentum = 0.50, # only used with SGD
+        nesterov = False, # only used with SGD or Adam
         batch_size = 64,
 
         # learning parameters
         learner = 'sgdr',
         learn = 1e-2,
-        learn_halve_every = 16, # unused with SGDR
-        learn_restart_advance = 16, # unused with SGDR
         epochs = 24,
         restarts = 2,
         restart_decay = 0.25, # only used with SGDR
@@ -473,10 +474,15 @@ def run(program, args=[]):
         restart_optim = False, # restarts also reset internal state of optimizer
 
         problem = 3,
-        # best results for ~10,000 parameters
-        # (keep these paired; update both at the same time!)
-        train_compare = 1.854613e-05,
-        valid_compare = 1.623881e-05,
+        compare = (
+            # best results for ~10,000 parameters
+            # training/validation pairs for each problem (starting from problem 0):
+            #(5.08e-05, 6.78e-05),
+            (7.577717e-04, 1.255284e-03),
+            (3.032806e-06, 3.963775e-06),
+            (3.676451e-07, 4.495362e-07),
+            (1.854613e-05, 1.623881e-05)
+        ),
 
         unsafe = True, # aka gotta go fast mode
     )
@@ -532,10 +538,10 @@ def run(program, args=[]):
 
         train_err = print_error("train",
                                 inputs, outputs,
-                                config.train_compare)
+                                config.compare[config.problem][0])
         valid_err = print_error("valid",
                                 valid_inputs, valid_outputs,
-                                config.valid_compare)
+                                config.compare[config.problem][1])
         train_losses.append(train_err)
         valid_losses.append(valid_err)
 
