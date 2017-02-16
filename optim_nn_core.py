@@ -36,23 +36,40 @@ def init_he_uniform(size, ins, outs):
 # Loss functions {{{1
 
 class Loss:
-    per_batch = False
+    pass
 
-    def mean(self, r):
-        return np.average(self.f(r))
+class CategoricalCrossentropy(Loss):
+    # lifted from theano
 
-    def dmean(self, r):
-        d = self.df(r)
-        return d / len(d)
+    def __init__(self, eps=1e-8):
+        self.eps = _f(eps)
 
-class Squared(Loss):
+    def F(self, p, y):
+        # TODO: assert dimensionality and p > 0 (if not self.unsafe?)
+        p = np.clip(p, self.eps, 1 - self.eps)
+        f = np.sum(-y * np.log(p) - (1 - y) * np.log(1 - p), axis=-1)
+        return np.mean(f, axis=-1)
+
+    def dF(self, p, y):
+        p = np.clip(p, self.eps, 1 - self.eps)
+        df = (p - y) / (p * (1 - p))
+        return df / y.shape[-1]
+
+class ResidualLoss(Loss):
+    def F(self, p, y): # mean
+        return np.mean(self.f(p - y))
+
+    def dF(self, p, y): # dmean
+        return self.df(p - y) / y.shape[-1]
+
+class Squared(ResidualLoss):
     def f(self, r):
         return np.square(r)
 
     def df(self, r):
         return 2 * r
 
-class Absolute(Loss):
+class Absolute(ResidualLoss):
     def f(self, r):
         return np.abs(r)
 
@@ -301,14 +318,6 @@ class Layer:
 
 # Nonparametric Layers {{{1
 
-class Sum(Layer):
-    def multi(self, B):
-        return np.sum(B, axis=0)
-
-    def dmulti(self, dB):
-        #assert len(dB) == 1, "unimplemented"
-        return dB[0] # TODO: does this always work?
-
 class Input(Layer):
     def __init__(self, shape):
         assert shape is not None
@@ -335,6 +344,14 @@ class Affine(Layer):
 
     def dF(self, dY):
         return dY * self.a
+
+class Sum(Layer):
+    def multi(self, B):
+        return np.sum(B, axis=0)
+
+    def dmulti(self, dB):
+        #assert len(dB) == 1, "unimplemented"
+        return dB[0] # TODO: does this always work?
 
 class Sigmoid(Layer): # aka Logistic
     def F(self, X):
@@ -386,6 +403,25 @@ class GeluApprox(Layer):
 
     def dF(self, dY):
         return dY * self.sig * (1 + self.a * (1 - self.sig))
+
+class Softmax(Layer):
+    # lifted from theano
+
+    def __init__(self, axis=-1):
+        super().__init__()
+        self.axis = int(axis)
+
+    def F(self, X):
+        alpha = np.max(X, axis=-1, keepdims=True)
+        num = np.exp(X - alpha)
+        den = np.sum(num, axis=-1, keepdims=True)
+        self.sm = num / den
+        return self.sm
+
+    def dF(self, dY):
+        dYsm = dY * self.sm
+        dX = dYsm - np.sum(dYsm, axis=-1, keepdims=True) * self.sm
+        return dX
 
 # Parametric Layers {{{1
 
@@ -560,17 +596,16 @@ class Ritual: # i'm just making up names at this point
     def reset(self):
         self.learner.reset(optim=True)
 
-    def measure(self, residual):
-        return self.mloss.mean(residual)
+    def measure(self, p, y):
+        return self.mloss.F(p, y)
 
-    def derive(self, residual):
-        return self.loss.dmean(residual)
+    def derive(self, p, y):
+        return self.loss.dF(p, y)
 
     def learn(self, inputs, outputs):
         predicted = self.model.forward(inputs)
-        residual = predicted - outputs
-        self.model.backward(self.derive(residual))
-        return residual
+        self.model.backward(self.derive(predicted, outputs))
+        return predicted
 
     def update(self):
         self.learner.optim.update(self.model.dW, self.model.W)
@@ -585,6 +620,8 @@ class Ritual: # i'm just making up names at this point
         cumsum_loss = _0
         batch_count = inputs.shape[0] // batch_size
         losses = []
+        assert inputs.shape[0] % batch_size == 0, \
+          "inputs is not evenly divisible by batch_size" # TODO: lift this restriction
         for b in range(batch_count):
             self.bn += 1
             bi = b * batch_size
@@ -594,10 +631,10 @@ class Ritual: # i'm just making up names at this point
             if self.learner.per_batch:
                 self.learner.batch(b / batch_count)
 
-            residual = self.learn(batch_inputs, batch_outputs)
+            predicted = self.learn(batch_inputs, batch_outputs)
             self.update()
 
-            batch_loss = self.measure(residual)
+            batch_loss = self.measure(predicted, batch_outputs)
             if np.isnan(batch_loss):
                 raise Exception("nan")
             cumsum_loss += batch_loss

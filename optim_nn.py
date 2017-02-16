@@ -20,14 +20,14 @@ class Dummy:
 
 # Loss functions {{{1
 
-class SquaredHalved(Loss):
+class SquaredHalved(ResidualLoss):
     def f(self, r):
         return np.square(r) / 2
 
     def df(self, r):
         return r
 
-class SomethingElse(Loss):
+class SomethingElse(ResidualLoss):
     # generalizes Absolute and SquaredHalved
     # plot: https://www.desmos.com/calculator/fagjg9vuz7
     def __init__(self, a=4/3):
@@ -41,6 +41,8 @@ class SomethingElse(Loss):
 
     def df(self, r):
         return np.sign(r) * np.abs(r)**self.c
+
+# Nonparametric Layers {{{1
 
 # Parametric Layers {{{1
 
@@ -238,7 +240,7 @@ def multiresnet(x, width, depth, block=2, multi=1,
 
     return y
 
-# etc. {{{1
+# Toy Data {{{1
 
 inits = dict(he_normal=init_he_normal, he_uniform=init_he_uniform)
 activations = dict(sigmoid=Sigmoid, tanh=Tanh, relu=Relu, elu=Elu, gelu=GeluApprox)
@@ -317,6 +319,8 @@ def toy_data(train_samples, valid_samples, problem=2):
 
     return (inputs, outputs), (valid_inputs, valid_outputs)
 
+# Model Creation {{{1
+
 def model_from_config(config, input_features, output_features, callbacks):
     # Our Test Model
 
@@ -337,6 +341,7 @@ def model_from_config(config, input_features, output_features, callbacks):
 
     #
 
+    # FIXME: unused variable
     training = config.epochs > 0 and config.restarts >= 0
 
     if config.fn_load is not None:
@@ -427,7 +432,7 @@ def model_from_config(config, input_features, output_features, callbacks):
 
     return model, learner, ritual, (loss, mloss)
 
-# main {{{1
+# main program {{{1
 
 def run(program, args=[]):
 
@@ -527,8 +532,7 @@ def run(program, args=[]):
     def measure_error():
         def print_error(name, inputs, outputs, comparison=None):
             predicted = model.forward(inputs)
-            residual = predicted - outputs
-            err = ritual.measure(residual)
+            err = ritual.measure(predicted, outputs)
             log(name + " loss", "{:12.6e}".format(err))
             # TODO: print logarithmic difference as it might be more meaningful
             # (fewer results stuck around -99%)
@@ -549,8 +553,6 @@ def run(program, args=[]):
 
     measure_error()
 
-    assert inputs.shape[0] % config.batch_size == 0, \
-           "inputs is not evenly divisible by batch_size" # TODO: lift this restriction
     ritual.prepare(model)
     while learner.next():
         indices = np.arange(inputs.shape[0])
@@ -587,7 +589,7 @@ def run(program, args=[]):
 
     return 0
 
-# do main {{{1
+# run main program {{{1
 
 if __name__ == '__main__':
     import sys
