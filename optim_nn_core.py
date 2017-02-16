@@ -48,19 +48,20 @@ class CategoricalCrossentropy(Loss):
         # TODO: assert dimensionality and p > 0 (if not self.unsafe?)
         p = np.clip(p, self.eps, 1 - self.eps)
         f = np.sum(-y * np.log(p) - (1 - y) * np.log(1 - p), axis=-1)
-        return np.mean(f, axis=-1)
+        return np.mean(f)
 
     def dF(self, p, y):
         p = np.clip(p, self.eps, 1 - self.eps)
         df = (p - y) / (p * (1 - p))
-        return df / y.shape[-1]
+        return df / len(y)
 
 class ResidualLoss(Loss):
     def F(self, p, y): # mean
         return np.mean(self.f(p - y))
 
     def dF(self, p, y): # dmean
-        return self.df(p - y) / y.shape[-1]
+        ret = self.df(p - y) / len(y)
+        return ret
 
 class Squared(ResidualLoss):
     def f(self, r):
@@ -80,7 +81,7 @@ class Absolute(ResidualLoss):
 
 class Optimizer:
     def __init__(self, alpha=0.1):
-        self.alpha = _f(alpha)
+        self.alpha = _f(alpha) # learning rate
         self.reset()
 
     def reset(self):
@@ -97,12 +98,11 @@ class Optimizer:
 
 class Momentum(Optimizer):
     def __init__(self, alpha=0.01, lamb=0, mu=0.9, nesterov=False):
-        self.alpha = _f(alpha) # learning rate
         self.lamb = _f(lamb) # weight decay
         self.mu = _f(mu) # momentum
         self.nesterov = bool(nesterov)
 
-        self.reset()
+        super().__init__(alpha)
 
     def reset(self):
         self.dWprev = None
@@ -116,8 +116,7 @@ class Momentum(Optimizer):
         self.dWprev[:] = V
         if self.nesterov: # TODO: is this correct? looks weird
             return self.mu * V - self.alpha * (dW + W * self.lamb)
-        else:
-            return V
+        return V
 
 class RMSprop(Optimizer):
     # RMSprop generalizes* Adagrad, etc.
@@ -127,7 +126,6 @@ class RMSprop(Optimizer):
     #   RMSprop.mu == 1
 
     def __init__(self, alpha=0.0001, mu=0.99, eps=1e-8):
-        self.alpha = _f(alpha) # learning rate
         self.mu = _f(mu) # decay term
         self.eps = _f(eps)
 
@@ -138,7 +136,7 @@ class RMSprop(Optimizer):
         # an input decays to 1/e its original amplitude over 99.5 epochs.
         # (this is from DSP, so how relevant it is in SGD is debatable)
 
-        self.reset()
+        super().__init__(alpha)
 
     def reset(self):
         self.g = None
@@ -168,14 +166,13 @@ class Adam(Optimizer):
     #   Adam.b2_t == 0
 
     def __init__(self, alpha=0.001, b1=0.9, b2=0.999, b1_t=0.9, b2_t=0.999, eps=1e-8):
-        self.alpha = _f(alpha) # learning rate
         self.b1 = _f(b1) # decay term
         self.b2 = _f(b2) # decay term
         self.b1_t_default = _f(b1_t) # decay term power t
         self.b2_t_default = _f(b2_t) # decay term power t
         self.eps = _f(eps)
 
-        self.reset()
+        super().__init__(alpha)
 
     def reset(self):
         self.mt = None
@@ -249,14 +246,7 @@ class Layer:
     def dmulti(self, dB):
         if len(dB) == 1:
             return self.dF(dB[0])
-        else:
-            dX = None
-            for dY in dB:
-                if dX is None:
-                    dX = self.dF(dY)
-                else:
-                    dX += self.dF(dY)
-            return dX
+        return sum((self.dF(dY) for dY in dB))
 
     # general utility methods:
 
@@ -267,10 +257,7 @@ class Layer:
             if shape is None:
                 return False
             self.input_shape = shape
-        if np.all(self.input_shape == parent.output_shape):
-            return True
-        else:
-            return False
+        return np.all(self.input_shape == parent.output_shape)
 
     def feed(self, child):
         if not child.compatible(self):
@@ -288,7 +275,7 @@ class Layer:
 
     def forward(self, lut):
         if not self.unsafe:
-            assert len(self.parents) > 0, self
+            assert self.parents, self
         B = []
         for parent in self.parents:
             # TODO: skip over irrelevant nodes (if any)
@@ -303,7 +290,7 @@ class Layer:
 
     def backward(self, lut):
         if not self.unsafe:
-            assert len(self.children) > 0, self
+            assert self.children, self
         dB = []
         for child in self.children:
             # TODO: skip over irrelevant nodes (if any)
@@ -643,8 +630,7 @@ class Ritual: # i'm just making up names at this point
         avg_loss = cumsum_loss / _f(batch_count)
         if return_losses:
             return avg_loss, losses
-        else:
-            return avg_loss
+        return avg_loss
 
 # Learners {{{1
 
@@ -734,12 +720,12 @@ class SGDR(Learner):
         self.restarts = int(restarts)
         self.restart_callback = callback
         # TODO: rename expando to something not insane
-        self.expando = expando if expando is not None else lambda i: 1
+        self.expando = expando if expando is not None else lambda i: i
 
         self.splits = []
         epochs = 0
         for i in range(0, self.restarts + 1):
-            split = epochs + int(self.restart_epochs * self.expando(i))
+            split = epochs + self.restart_epochs + int(self.expando(i))
             self.splits.append(split)
             epochs = split
         super().__init__(optim, epochs, rate)

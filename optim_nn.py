@@ -10,7 +10,9 @@ from optim_nn_core import *
 from optim_nn_core import _check, _f
 
 import sys
-lament = lambda *args, **kwargs: print(*args, file=sys.stderr, **kwargs)
+
+def lament(*args, **kwargs):
+    print(*args, file=sys.stderr, **kwargs)
 
 def log(left, right):
     lament("{:>20}:   {}".format(left, right))
@@ -160,7 +162,8 @@ class NoisyRitual(Ritual):
 
 class DumbLearner(AnnealingLearner):
     # this is my own awful contraption. it's not really "SGD with restarts".
-    def __init__(self, optim, epochs=100, rate=None, halve_every=10, restarts=0, restart_advance=20, callback=None):
+    def __init__(self, optim, epochs=100, rate=None, halve_every=10,
+                 restarts=0, restart_advance=20, callback=None):
         self.restart_epochs = int(epochs)
         self.restarts = int(restarts)
         self.restart_advance = float(restart_advance)
@@ -183,58 +186,67 @@ class DumbLearner(AnnealingLearner):
                 self.restart_callback(restart)
         return True
 
+def _mr_batchless(y, width, depth, block, multi, activation, style, FC, d):
+    skip = y
+    merger = Sum()
+    skip.feed(merger)
+    z_start = skip.feed(activation())
+    for _ in range(multi):
+        z = z_start
+        for j in range(block):
+            if j > 0:
+                z = z.feed(activation())
+            z = z.feed(FC())
+        z.feed(merger)
+    y = merger
+    return y
+
+def _mr_onelesssum(y, width, depth, block, multi, activation, style, FC, d):
+    # this is my own awful contraption.
+    is_last = d + 1 == depth
+    needs_sum = not is_last or multi > 1
+    skip = y
+    if needs_sum:
+        merger = Sum()
+    if not is_last:
+        skip.feed(merger)
+    z_start = skip.feed(activation())
+    for _ in range(multi):
+        z = z_start
+        for j in range(block):
+            if j > 0:
+                z = z.feed(activation())
+            z = z.feed(FC())
+        if needs_sum:
+            z.feed(merger)
+    if needs_sum:
+        y = merger
+    else:
+        y = z
+    return y
+
+_mr_styles = dict(
+    batchless=_mr_batchless,
+    onelesssum=_mr_onelesssum,
+)
+
 def multiresnet(x, width, depth, block=2, multi=1,
                 activation=Relu, style='batchless',
                 init=init_he_normal):
+    if style not in _mr_styles:
+        raise Exception('unknown resnet style', style)
+
     y = x
     last_size = x.output_shape[0]
 
-    FC = lambda size: Dense(size, init)
-    #FC = lambda size: DenseOneLess(size, init)
-
     for d in range(depth):
         size = width
+        FC = lambda: Dense(size, init)
 
         if last_size != size:
-            y = y.feed(Dense(size, init))
+            y = y.feed(FC())
 
-        if style == 'batchless':
-            skip = y
-            merger = Sum()
-            skip.feed(merger)
-            z_start = skip.feed(activation())
-            for i in range(multi):
-                z = z_start
-                for i in range(block):
-                    if i > 0:
-                        z = z.feed(activation())
-                    z = z.feed(FC(size))
-                z.feed(merger)
-            y = merger
-        elif style == 'onelesssum':
-            # this is my own awful contraption.
-            is_last = d + 1 == depth
-            needs_sum = not is_last or multi > 1
-            skip = y
-            if needs_sum:
-                merger = Sum()
-            if not is_last:
-                skip.feed(merger)
-            z_start = skip.feed(activation())
-            for i in range(multi):
-                z = z_start
-                for i in range(block):
-                    if i > 0:
-                        z = z.feed(activation())
-                    z = z.feed(FC(size))
-                if needs_sum:
-                    z.feed(merger)
-            if needs_sum:
-                y = merger
-            else:
-                y = z
-        else:
-            raise Exception('unknown resnet style', style)
+        y = _mr_styles[style](y, width, depth, block, multi, activation, style, FC, d)
 
         last_size = size
 
@@ -260,17 +272,17 @@ def normalize_data(data, mean=None, std=None):
 def toy_data(train_samples, valid_samples, problem=2):
     total_samples = train_samples + valid_samples
 
+    nod = normalize_data # shorthand to keep a sane indentation
+
     if problem == 0:
-        from ml.cie_mlp_data import rgbcompare, input_samples, output_samples, \
-                                    inputs, outputs, valid_inputs, valid_outputs, \
-                                    x_scale, y_scale
+        from ml.cie_mlp_data import inputs, outputs, valid_inputs, valid_outputs
         inputs, outputs = _f(inputs), _f(outputs)
         valid_inputs, valid_outputs = _f(valid_inputs), _f(valid_outputs)
 
-        normalize_data(inputs, 127.5, 73.9)
-        normalize_data(outputs, 44.8, 21.7)
-        normalize_data(valid_inputs, 127.5, 73.9)
-        normalize_data(valid_outputs, 44.8, 21.7)
+        nod(inputs, 127.5, 73.9)
+        nod(outputs, 44.8, 21.7)
+        nod(valid_inputs, 127.5, 73.9)
+        nod(valid_outputs, 44.8, 21.7)
 
     elif problem == 1:
         from sklearn.datasets import make_friedman1
@@ -278,8 +290,8 @@ def toy_data(train_samples, valid_samples, problem=2):
         inputs, outputs = _f(inputs), _f(outputs)
         outputs = np.expand_dims(outputs, -1)
 
-        normalize_data(inputs, 0.5, 1/np.sqrt(12))
-        normalize_data(outputs, 14.4, 4.9)
+        nod(inputs, 0.5, 1/np.sqrt(12))
+        nod(outputs, 14.4, 4.9)
 
     elif problem == 2:
         from sklearn.datasets import make_friedman2
@@ -287,11 +299,11 @@ def toy_data(train_samples, valid_samples, problem=2):
         inputs, outputs = _f(inputs), _f(outputs)
         outputs = np.expand_dims(outputs, -1)
 
-        normalize_data(inputs,
-          [5.00e+01, 9.45e+02, 5.01e-01, 5.98e+00],
-          [2.89e+01, 4.72e+02, 2.89e-01, 2.87e+00])
+        nod(inputs,
+            [5.00e+01, 9.45e+02, 5.01e-01, 5.98e+00],
+            [2.89e+01, 4.72e+02, 2.89e-01, 2.87e+00])
 
-        normalize_data(outputs, [482], [380])
+        nod(outputs, [482], [380])
 
     elif problem == 3:
         from sklearn.datasets import make_friedman3
@@ -299,11 +311,11 @@ def toy_data(train_samples, valid_samples, problem=2):
         inputs, outputs = _f(inputs), _f(outputs)
         outputs = np.expand_dims(outputs, -1)
 
-        normalize_data(inputs,
-          [4.98e+01, 9.45e+02, 4.99e-01, 6.02e+00],
-          [2.88e+01, 4.73e+02, 2.90e-01, 2.87e+00])
+        nod(inputs,
+            [4.98e+01, 9.45e+02, 4.99e-01, 6.02e+00],
+            [2.88e+01, 4.73e+02, 2.90e-01, 2.87e+00])
 
-        normalize_data(outputs, [1.32327931], [0.31776295])
+        nod(outputs, [1.32327931], [0.31776295])
 
     else:
         raise Exception("unknown toy data set", problem)
@@ -340,9 +352,6 @@ def model_from_config(config, input_features, output_features, callbacks):
     model = Model(x, y, unsafe=config.unsafe)
 
     #
-
-    # FIXME: unused variable
-    training = config.epochs > 0 and config.restarts >= 0
 
     if config.fn_load is not None:
         log('loading weights', config.fn_load)
@@ -390,7 +399,8 @@ def model_from_config(config, input_features, output_features, callbacks):
     elif config.learner == 'dumb':
         learner = DumbLearner(optim, epochs=config.epochs, rate=config.learn,
                               halve_every=config.learn_halve_every,
-                              restarts=config.restarts, restart_advance=config.learn_restart_advance,
+                              restarts=config.restarts,
+                              restart_advance=config.learn_restart_advance,
                               callback=rscb)
         log("final learning rate", "{:10.8f}".format(learner.final_rate))
     elif config.learner == 'sgd':
@@ -430,11 +440,12 @@ def model_from_config(config, input_features, output_features, callbacks):
 
     #
 
-    return model, learner, ritual, (loss, mloss)
+    return model, learner, ritual
 
 # main program {{{1
 
-def run(program, args=[]):
+def run(program, args=None):
+    args = args if args else []
 
     np.random.seed(42069)
 
@@ -469,7 +480,7 @@ def run(program, args=[]):
         epochs = 24,
         restarts = 2,
         restart_decay = 0.25, # only used with SGDR
-        expando = lambda i: i + 1,
+        expando = lambda i: 24 * i,
 
         # misc
         init = 'he_normal',
@@ -484,15 +495,17 @@ def run(program, args=[]):
             # training/validation pairs for each problem (starting from problem 0):
             #(5.08e-05, 6.78e-05),
             (7.577717e-04, 1.255284e-03),
-            (3.032806e-06, 3.963775e-06),
-            (3.676451e-07, 4.495362e-07),
-            (1.854613e-05, 1.623881e-05)
+            # 1080 epochs on these...
+            (1.790511e-07, 2.785208e-07),
+            (2.233277e-08, 3.580281e-08),
+            (5.266719e-07, 5.832677e-06), # overfitting? bad valid set?
         ),
 
         unsafe = True, # aka gotta go fast mode
     )
 
-    for k in ['parallel_style', 'activation', 'optim', 'learner', 'init', 'loss', 'mloss', 'ritual']:
+    for k in ['parallel_style', 'activation', 'optim', 'learner',
+              'init', 'loss', 'mloss', 'ritual']:
         config[k] = config[k].lower()
 
     config.pprint()
@@ -507,20 +520,16 @@ def run(program, args=[]):
 
     callbacks = Dummy()
 
-    model, learner, ritual, (loss, mloss) = \
+    model, learner, ritual = \
       model_from_config(config, input_features, output_features, callbacks)
 
     # Model Information
 
-    if 0:
-        node_names = ' '.join([str(node) for node in model.ordered_nodes])
-        log('{} nodes'.format(len(model.ordered_nodes)), node_names)
-    else:
-        for node in model.ordered_nodes:
-            children = [str(n) for n in node.children]
-            if len(children) > 0:
-                sep = '->'
-                print(str(node)+sep+('\n'+str(node)+sep).join(children))
+    for node in model.ordered_nodes:
+        children = [str(n) for n in node.children]
+        if children:
+            sep = '->'
+            print(str(node)+sep+('\n'+str(node)+sep).join(children))
     log('parameters', model.param_count)
 
     # Training {{{2
@@ -534,10 +543,8 @@ def run(program, args=[]):
             predicted = model.forward(inputs)
             err = ritual.measure(predicted, outputs)
             log(name + " loss", "{:12.6e}".format(err))
-            # TODO: print logarithmic difference as it might be more meaningful
-            # (fewer results stuck around -99%)
             if comparison:
-                log("improvement", "{:+7.2f}%".format((comparison / err - 1) * 100))
+                log("improvement", "10**({:+7.4f}) times".format(np.log10(comparison / err)))
             return err
 
         train_err = print_error("train",
@@ -551,10 +558,13 @@ def run(program, args=[]):
 
     callbacks.restart = measure_error
 
-    measure_error()
+    training = config.epochs > 0 and config.restarts >= 0
+
+    if training:
+        measure_error()
 
     ritual.prepare(model)
-    while learner.next():
+    while training and learner.next():
         indices = np.arange(inputs.shape[0])
         np.random.shuffle(indices)
         shuffled_inputs = inputs[indices]
@@ -573,11 +583,11 @@ def run(program, args=[]):
 
     measure_error()
 
-    if config.fn_save is not None:
+    if training and config.fn_save is not None:
         log('saving weights', config.fn_save)
         model.save_weights(config.fn_save, overwrite=True)
 
-    if config.log_fn is not None:
+    if training and config.log_fn is not None:
         log('saving losses', config.log_fn)
         np.savez_compressed(config.log_fn,
                             batch_losses=np.array(batch_losses, dtype=_f),
@@ -592,5 +602,4 @@ def run(program, args=[]):
 # run main program {{{1
 
 if __name__ == '__main__':
-    import sys
     sys.exit(run(sys.argv[0], sys.argv[1:]))
