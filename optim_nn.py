@@ -48,6 +48,67 @@ class SomethingElse(ResidualLoss):
 
 # Parametric Layers {{{1
 
+class LayerNorm(Layer):
+    # paper: https://arxiv.org/abs/1607.06450
+    # note: nonparametric when affine == False
+
+    def __init__(self, eps=1e-5, affine=True):
+        super().__init__()
+        self.eps = _f(eps)
+        self.affine = bool(affine)
+        self.size = None
+
+    def make_shape(self, shape):
+        super().make_shape(shape)
+        if len(shape) != 1:
+            return False
+        self.features = shape[0]
+        if self.affine:
+            self.size = 2 * self.features
+        return shape
+
+    def init(self, W, dW):
+        # TODO: move this little bit into super(), also assert against self.size
+        self.W = W
+        self.dW = dW
+
+        f = self.features
+
+        self.gamma, self.dgamma = self.W[0*f:1*f], self.dW[0*f:1*f]
+        self.beta, self.dbeta   = self.W[1*f:2*f], self.dW[1*f:2*f]
+
+        self.gamma[:] = 1
+        self.beta[:] = 0
+
+    def F(self, X):
+        self.mean = X.mean(0)
+        self.center = X - self.mean
+        self.var = self.center.var(0) + self.eps
+        self.std = np.sqrt(self.var)
+
+        self.Xnorm = self.center / self.std
+        if self.affine:
+            return self.gamma * self.Xnorm + self.beta
+        return self.Xnorm
+
+    def dF(self, dY):
+        length = dY.shape[0]
+
+        if self.affine:
+            # Y = gamma * Xnorm + beta
+            dXnorm = dY * self.gamma
+            self.dgamma[:] = (dY * self.Xnorm).sum(0)
+            self.dbeta[:] = dY.sum(0)
+        else:
+            dXnorm = dY
+
+        dstd = (dXnorm * self.center).sum(0) / -self.var
+        dcenter = dXnorm / self.std + dstd / self.std * self.center / length
+        dmean = -dcenter.sum(0)
+        dX = dcenter + dmean / length
+
+        return dX
+
 class DenseOneLess(Dense):
     def init(self, W, dW):
         super().init(W, dW)
@@ -65,35 +126,6 @@ class DenseOneLess(Dense):
         self.dcoeffs[:] = self.X.T.dot(dY)
         self.dbiases[:] = dY.sum(0, keepdims=True)
         np.fill_diagonal(self.dcoeffs, 0)
-        return dX
-
-class LayerNorm(Layer):
-    # paper: https://arxiv.org/abs/1607.06450
-    # my implementation may be incorrect.
-
-    def __init__(self, eps=1e-3, axis=-1):
-        super().__init__()
-        self.eps = _f(eps)
-        self.axis = int(axis)
-
-    def F(self, X):
-        self.center = X - np.mean(X, axis=self.axis, keepdims=True)
-        #self.var = np.var(X, axis=self.axis, keepdims=True) + self.eps
-        self.var = np.mean(np.square(self.center), axis=self.axis, keepdims=True) + self.eps
-        self.std = np.sqrt(self.var) + self.eps
-        Y = self.center / self.std
-        return Y
-
-    def dF(self, dY):
-        length = self.input_shape[self.axis]
-
-        dstd     = dY * (-self.center / self.var)
-        dvar     = dstd * (0.5 / self.std)
-        dcenter2 = dvar * (1 / length)
-        dcenter  = dY * (1 / self.std)
-        dcenter += dcenter2 * (2 * self.center)
-        dX       = dcenter - dcenter / length
-
         return dX
 
 # Rituals {{{1
@@ -205,6 +237,28 @@ class DumbLearner(AnnealingLearner):
                 self.restart_callback(restart)
         return True
 
+# Components {{{1
+
+def _mr_make_norm(norm):
+    def _mr_norm(y, width, depth, block, multi, activation, style, FC, d):
+        skip = y
+        merger = Sum()
+        skip.feed(merger)
+        z_start = skip
+        z_start = z_start.feed(norm())
+        z_start = z_start.feed(activation())
+        for _ in range(multi):
+            z = z_start
+            for j in range(block):
+                if j > 0:
+                    z = z.feed(norm())
+                    z = z.feed(activation())
+                z = z.feed(FC())
+            z.feed(merger)
+        y = merger
+        return y
+    return _mr_norm
+
 def _mr_batchless(y, width, depth, block, multi, activation, style, FC, d):
     skip = y
     merger = Sum()
@@ -242,9 +296,11 @@ def _mr_onelesssum(y, width, depth, block, multi, activation, style, FC, d):
         y = merger
     else:
         y = z
+    #y = y.feed(LayerNorm())
     return y
 
 _mr_styles = dict(
+    lnorm=_mr_make_norm(LayerNorm),
     batchless=_mr_batchless,
     onelesssum=_mr_onelesssum,
 )
@@ -507,8 +563,9 @@ def run(program, args=None):
         mloss = 'mse',
         ritual = 'default',
         restart_optim = False, # restarts also reset internal state of optimizer
+        warmup = True,
 
-        problem = 3,
+        problem = 2,
         compare = (
             # best results for ~10,000 parameters
             # training/validation pairs for each problem (starting from problem 0):
@@ -583,6 +640,15 @@ def run(program, args=None):
         measure_error()
 
     ritual.prepare(model)
+
+    if training and config.warmup:
+        log("warming", "up")
+        ritual.train_batched(
+            np.random.normal(0, 1, size=inputs.shape),
+            np.random.normal(0, 1, size=outputs.shape),
+            config.batch_size)
+        measure_error()
+
     while training and learner.next():
         indices = np.arange(inputs.shape[0])
         np.random.shuffle(indices)
