@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 
-# BIG TODO: ensure numpy isn't upcasting to float64 *anywhere*.
-#           this is gonna take some work.
-
 # external packages required for full functionality:
 # numpy scipy h5py sklearn dotmap
+
+# BIG TODO: ensure numpy isn't upcasting to float64 *anywhere*.
+#           this is gonna take some work.
 
 from optim_nn_core import *
 from optim_nn_core import _check, _f
@@ -47,6 +47,25 @@ class SomethingElse(ResidualLoss):
 # Nonparametric Layers {{{1
 
 # Parametric Layers {{{1
+
+class DenseOneLess(Dense):
+    def init(self, W, dW):
+        super().init(W, dW)
+        ins, outs = self.input_shape[0], self.output_shape[0]
+        assert ins == outs, (ins, outs)
+
+    def F(self, X):
+        np.fill_diagonal(self.coeffs, 0)
+        self.X = X
+        Y = X.dot(self.coeffs) + self.biases
+        return Y
+
+    def dF(self, dY):
+        dX = dY.dot(self.coeffs.T)
+        self.dcoeffs[:] = self.X.T.dot(dY)
+        self.dbiases[:] = dY.sum(0, keepdims=True)
+        np.fill_diagonal(self.dcoeffs, 0)
+        return dX
 
 class LayerNorm(Layer):
     # paper: https://arxiv.org/abs/1607.06450

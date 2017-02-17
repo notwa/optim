@@ -455,25 +455,6 @@ class Dense(Layer):
         self.dbiases[:] = dY.sum(0, keepdims=True)
         return dX
 
-class DenseOneLess(Dense):
-    def init(self, W, dW):
-        super().init(W, dW)
-        ins, outs = self.input_shape[0], self.output_shape[0]
-        assert ins == outs, (ins, outs)
-
-    def F(self, X):
-        np.fill_diagonal(self.coeffs, 0)
-        self.X = X
-        Y = X.dot(self.coeffs) + self.biases
-        return Y
-
-    def dF(self, dY):
-        dX = dY.dot(self.coeffs.T)
-        self.dcoeffs[:] = self.X.T.dot(dY)
-        self.dbiases[:] = dY.sum(0, keepdims=True)
-        np.fill_diagonal(self.dcoeffs, 0)
-        return dX
-
 # Models {{{1
 
 class Model:
