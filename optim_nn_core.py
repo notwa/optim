@@ -563,6 +563,8 @@ class Ritual: # i'm just making up names at this point
 
     def reset(self):
         self.learner.reset(optim=True)
+        self.en = 0
+        self.bn = 0
 
     def measure(self, p, y):
         return self.mloss.F(p, y)
