@@ -68,9 +68,7 @@ class LayerNorm(Layer):
         return shape
 
     def init(self, W, dW):
-        # TODO: move this little bit into super(), also assert against self.size
-        self.W = W
-        self.dW = dW
+        super().init(W, dW)
 
         f = self.features
 
@@ -95,7 +93,6 @@ class LayerNorm(Layer):
         length = dY.shape[0]
 
         if self.affine:
-            # Y = gamma * Xnorm + beta
             dXnorm = dY * self.gamma
             self.dgamma[:] = (dY * self.Xnorm).sum(0)
             self.dbeta[:] = dY.sum(0)
@@ -332,14 +329,22 @@ def multiresnet(x, width, depth, block=2, multi=1,
 inits = dict(he_normal=init_he_normal, he_uniform=init_he_uniform)
 activations = dict(sigmoid=Sigmoid, tanh=Tanh, relu=Relu, elu=Elu, gelu=GeluApprox)
 
+def prettyize(data):
+    if isinstance(data, np.ndarray):
+        s = ', '.join(('{:8.2e}'.format(n) for n in data))
+        s = '[' + s + ']'
+    else:
+        s = '{:8.2e}'.format(data)
+    return s
+
 def normalize_data(data, mean=None, std=None):
     # in-place
     if mean is None or std is None:
         mean = np.mean(data, axis=0)
         std  =  np.std(data, axis=0)
-        # TODO: construct function call string for copy-paste convenience
-        lament('mean:', mean)
-        lament('std: ', std)
+        mean_str = prettyize(mean)
+        std_str = prettyize(std)
+        lament('nod(...,\n    {},\n    {})'.format(mean_str, std_str))
         sys.exit(1)
     data -= _f(mean)
     data /= _f(std)
@@ -410,12 +415,12 @@ def toy_data(train_samples, valid_samples, problem=2):
 
 def optim_from_config(config):
     if config.optim == 'adam':
-        assert not config.nesterov, "unimplemented"
         d1 = config.optim_decay1 if 'optim_decay1' in config else 9.5
         d2 = config.optim_decay2 if 'optim_decay2' in config else 999.5
         b1 = np.exp(-1/d1)
         b2 = np.exp(-1/d2)
-        optim = Adam(b1=b1, b1_t=b1, b2=b2, b2_t=b2)
+        o = Nadam if config.nesterov else Adam
+        optim = o(b1=b1, b2=b2)
     elif config.optim in ('rms', 'rmsprop'):
         d2 = config.optim_decay2 if 'optim_decay2' in config else 99.5
         mu = np.exp(-1/d2)
@@ -550,14 +555,15 @@ def run(program, args=None):
         optim = 'adam',
         optim_decay1 = 2,   # given in epochs (optional)
         optim_decay2 = 100, # given in epochs (optional)
-        momentum = 0.50, # only used with SGD
-        nesterov = False, # only used with SGD or Adam
+        momentum = 0.90, # only used with SGD
+        nesterov = True, # only used with SGD or Adam
         batch_size = 64,
 
         # learning parameters
         learner = 'sgdr',
         learn = 1e-2,
         epochs = 24,
+        learn_halve_every = 16, # only used with anneal/dumb
         restarts = 2,
         restart_decay = 0.25, # only used with SGDR
         expando = lambda i: 24 * i,
@@ -569,8 +575,9 @@ def run(program, args=None):
         ritual = 'default',
         restart_optim = False, # restarts also reset internal state of optimizer
         warmup = True,
+        log10_loss = True, # personally, i'm sick of looking linear loss values!
 
-        problem = 2,
+        problem = 3,
         compare = (
             # best results for ~10,000 parameters
             # training/validation pairs for each problem (starting from problem 0):
@@ -592,7 +599,6 @@ def run(program, args=None):
     config.pprint()
 
     # Toy Data {{{2
-    # (our model is probably complete overkill for this, so TODO: better data)
 
     (inputs, outputs), (valid_inputs, valid_outputs) = \
       toy_data(2**14, 2**11, problem=config.problem)
@@ -624,8 +630,11 @@ def run(program, args=None):
             predicted = model.forward(inputs)
             err = ritual.measure(predicted, outputs)
             log(name + " loss", "{:12.6e}".format(err))
-            if comparison:
-                log("improvement", "10**({:+7.4f}) times".format(np.log10(comparison / err)))
+            if config.log10_loss:
+                log(name + " log10-loss", "{:+6.3f}".format(np.log10(err)))
+            elif comparison:
+                fmt = "10**({:+7.4f}) times"
+                log("improvement", fmt.format(np.log10(comparison / err)))
             return err
 
         train_err = print_error("train",
@@ -645,11 +654,19 @@ def run(program, args=None):
 
     if training and config.warmup:
         log("warming", "up")
-        ritual.train_batched(
-            np.random.normal(size=inputs.shape),
-            np.random.normal(size=outputs.shape),
-            config.batch_size)
-        ritual.reset()
+
+        # use plain SGD in warmup to prevent (or possibly cause?) numeric issues
+        temp_optim = learner.optim
+        learner.optim = Optimizer(alpha=0.01)
+
+        for _ in range(2):
+            ritual.train_batched(
+                np.random.normal(size=inputs.shape),
+                np.random.normal(size=outputs.shape),
+                config.batch_size)
+            ritual.reset()
+
+        learner.optim = temp_optim
 
     if training:
         measure_error()
@@ -668,8 +685,12 @@ def run(program, args=None):
 
         #log("learning rate", "{:10.8f}".format(learner.rate))
         #log("average loss", "{:11.7f}".format(avg_loss))
-        fmt = "epoch {:4.0f}, rate {:10.8f}, loss {:12.6e}"
-        log("info", fmt.format(learner.epoch + 1, learner.rate, avg_loss))
+        if config.log10_loss:
+            fmt = "epoch {:4.0f}, rate {:10.8f}, log10-loss {:+6.3f}"
+            log("info", fmt.format(learner.epoch + 1, learner.rate, np.log10(avg_loss)))
+        else:
+            fmt = "epoch {:4.0f}, rate {:10.8f}, loss {:12.6e}"
+            log("info", fmt.format(learner.epoch + 1, learner.rate, avg_loss))
 
     measure_error()
 

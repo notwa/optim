@@ -97,25 +97,24 @@ class Optimizer:
 # https://github.com/tiny-dnn/tiny-dnn/blob/master/tiny_dnn/optimizers/optimizer.h
 
 class Momentum(Optimizer):
-    def __init__(self, alpha=0.01, lamb=0, mu=0.9, nesterov=False):
-        self.lamb = _f(lamb) # weight decay
+    def __init__(self, alpha=0.01, mu=0.9, nesterov=False):
         self.mu = _f(mu) # momentum
         self.nesterov = bool(nesterov)
 
         super().__init__(alpha)
 
     def reset(self):
-        self.dWprev = None
+        self.Vprev = None
 
     def compute(self, dW, W):
-        if self.dWprev is None:
-            #self.dWprev = np.zeros_like(dW)
-            self.dWprev = np.copy(dW)
+        if self.Vprev is None:
+            self.Vprev = np.copy(dW)
 
-        V = self.mu * self.dWprev - self.alpha * (dW + W * self.lamb)
-        self.dWprev[:] = V
-        if self.nesterov: # TODO: is this correct? looks weird
-            return self.mu * V - self.alpha * (dW + W * self.lamb)
+        V = self.mu * self.Vprev - self.alpha * dW
+        self.Vprev[:] = V
+        if self.nesterov:
+            return self.mu * V - self.alpha * dW
+
         return V
 
 class RMSprop(Optimizer):
@@ -154,6 +153,7 @@ class RMSprop(Optimizer):
         return -self.alpha * dW / np.sqrt(self.g + self.eps)
 
 class Adam(Optimizer):
+    # paper: https://arxiv.org/abs/1412.6980
     # Adam generalizes* RMSprop, and
     # adds a decay term to the regular (non-squared) delta, and
     # does some decay-gain voodoo. (i guess it's compensating
@@ -165,11 +165,11 @@ class Adam(Optimizer):
     #   Adam.b1_t == 0
     #   Adam.b2_t == 0
 
-    def __init__(self, alpha=0.001, b1=0.9, b2=0.999, b1_t=0.9, b2_t=0.999, eps=1e-8):
+    def __init__(self, alpha=0.002, b1=0.9, b2=0.999, eps=1e-8):
         self.b1 = _f(b1) # decay term
         self.b2 = _f(b2) # decay term
-        self.b1_t_default = _f(b1_t) # decay term power t
-        self.b2_t_default = _f(b2_t) # decay term power t
+        self.b1_t_default = _f(b1) # decay term power t
+        self.b2_t_default = _f(b2) # decay term power t
         self.eps = _f(eps)
 
         super().__init__(alpha)
@@ -196,6 +196,53 @@ class Adam(Optimizer):
 
         return -self.alpha * (self.mt / (1 - self.b1_t)) \
                    / np.sqrt((self.vt / (1 - self.b2_t)) + self.eps)
+
+class Nadam(Optimizer):
+    # paper: https://arxiv.org/abs/1412.6980
+    # paper: http://cs229.stanford.edu/proj2015/054_report.pdf
+    # TODO; double-check this implementation. also actually read the damn paper.
+    # lifted from https://github.com/fchollet/keras/blob/5d38b04/keras/optimizers.py#L530
+    # lifted from https://github.com/jpilaul/IFT6266_project/blob/master/Models/Algo_Momentum.py
+
+    def __init__(self, alpha=0.002, b1=0.9, b2=0.999, eps=1e-8):
+        self.b1 = _f(b1) # decay term
+        self.b2 = _f(b2) # decay term
+        self.eps = _f(eps)
+
+        super().__init__(alpha)
+
+    def reset(self):
+        self.mt = None
+        self.vt = None
+        self.t = 0
+        self.sched = 1
+
+    def compute(self, dW, W):
+        self.t += 1
+
+        if self.mt is None:
+            self.mt = np.zeros_like(dW)
+        if self.vt is None:
+            self.vt = np.zeros_like(dW)
+
+        ut0 = self.b1 * (1 - 0.5 * 0.96**(self.t + 0))
+        ut1 = self.b1 * (1 - 0.5 * 0.96**(self.t + 1))
+
+        sched0 = self.sched * ut0
+        sched1 = self.sched * ut0 * ut1
+        self.sched = sched0
+
+        gp = dW / (1 - sched0)
+
+        self.mt[:] = self.b1 * self.mt + (1 - self.b1) * dW
+        self.vt[:] = self.b2 * self.vt + (1 - self.b2) * np.square(dW)
+
+        mtp = self.mt / (1 - sched1)
+        vtp = self.vt / (1 - self.b2**self.t)
+
+        mt_bar = (1 - ut0) * gp + ut1 * mtp
+
+        return -self.alpha * mt_bar / (np.sqrt(vtp) + self.eps)
 
 # Abstract Layers {{{1
 
@@ -272,6 +319,12 @@ class Layer:
 
     def validate_output(self, Y):
         assert Y.shape[1:] == self.output_shape, (str(self), Y.shape[1:], self.output_shape)
+
+    def init(self, W, dW):
+        assert  W.ndim == 1  and W.shape[0] == self.size, W.shape
+        assert dW.ndim == 1 and dW.shape[0] == self.size, dW.shape
+        self.W = W
+        self.dW = dW
 
     def forward(self, lut):
         if not self.unsafe:
@@ -430,10 +483,10 @@ class Dense(Layer):
         return shape
 
     def init(self, W, dW):
+        super().init(W, dW)
+
         ins, outs = self.input_shape[0], self.output_shape[0]
 
-        self.W = W
-        self.dW = dW
         self.coeffs = self.W[:self.nW].reshape(ins, outs)
         self.biases = self.W[self.nW:].reshape(1, outs)
         self.dcoeffs = self.dW[:self.nW].reshape(ins, outs)
@@ -507,12 +560,10 @@ class Model:
 
     def backward(self, error):
         lut = dict()
-        input_node = self.ordered_nodes[0]
         output_node = self.ordered_nodes[-1]
         lut[output_node] = output_node.dmulti(np.expand_dims(error, 0))
         for node in reversed(self.ordered_nodes[:-1]):
             lut[node] = node.backward(lut)
-        #return lut[input_node] # meaningless value
         return self.dW
 
     def load_weights(self, fn):
