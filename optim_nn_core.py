@@ -396,7 +396,7 @@ class Sum(Layer):
 class Sigmoid(Layer): # aka Logistic
     def F(self, X):
         self.sig = sigmoid(X)
-        return X * self.sig
+        return self.sig
 
     def dF(self, dY):
         return dY * self.sig * (1 - self.sig)
@@ -404,7 +404,7 @@ class Sigmoid(Layer): # aka Logistic
 class Tanh(Layer):
     def F(self, X):
         self.sig = np.tanh(X)
-        return X * self.sig
+        return self.sig
 
     def dF(self, dY):
         return dY * (1 - self.sig * self.sig)

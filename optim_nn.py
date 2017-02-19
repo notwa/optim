@@ -14,8 +14,15 @@ import sys
 def lament(*args, **kwargs):
     print(*args, file=sys.stderr, **kwargs)
 
-def log(left, right):
-    lament("{:>20}:   {}".format(left, right))
+_log_was_update = False
+def log(left, right, update=False):
+    s = "\x1B[1m  {:>20}:\x1B[0m   {}".format(left, right)
+    global _log_was_update
+    if update and _log_was_update:
+        lament('\x1B[F' + s)
+    else:
+        lament(s)
+    _log_was_update = update
 
 class Dummy:
     pass
@@ -575,7 +582,10 @@ def run(program, args=None):
         ritual = 'default',
         restart_optim = False, # restarts also reset internal state of optimizer
         warmup = True, # train a couple epochs on gaussian noise and reset
+
+        # logging/output
         log10_loss = True, # personally, i'm sick of looking linear loss values!
+        #fancy_logs = True, # unimplemented
 
         problem = 3,
         compare = (
@@ -629,12 +639,20 @@ def run(program, args=None):
         def print_error(name, inputs, outputs, comparison=None):
             predicted = model.forward(inputs)
             err = ritual.measure(predicted, outputs)
-            log(name + " loss", "{:12.6e}".format(err))
             if config.log10_loss:
-                log(name + " log10-loss", "{:+6.3f}".format(np.log10(err)))
-            elif comparison:
-                fmt = "10**({:+7.4f}) times"
-                log("improvement", fmt.format(np.log10(comparison / err)))
+                print(name, "{:12.6e}".format(err))
+                if comparison:
+                    err10 = np.log10(err)
+                    cmp10 = np.log10(comparison)
+                    color = '\x1B[31m' if err10 > cmp10 else '\x1B[32m'
+                    log(name + " log10-loss", "{:+6.3f} {}({:+6.3f})\x1B[0m".format(err10, color, err10 - cmp10))
+                else:
+                    log(name + " log10-loss", "{:+6.3f}".format(err, np.log10(err)))
+            else:
+                log(name + " loss", "{:12.6e}".format(err))
+                if comparison:
+                    fmt = "10**({:+7.4f}) times"
+                    log("improvement", fmt.format(np.log10(comparison / err)))
             return err
 
         train_err = print_error("train",
@@ -696,10 +714,12 @@ def run(program, args=None):
 
         if config.log10_loss:
             fmt = "epoch {:4.0f}, rate {:10.8f}, log10-loss {:+6.3f}"
-            log("info", fmt.format(learner.epoch + 1, learner.rate, np.log10(avg_loss)))
+            log("info", fmt.format(learner.epoch + 1, learner.rate, np.log10(avg_loss)),
+                update=True)
         else:
             fmt = "epoch {:4.0f}, rate {:10.8f}, loss {:12.6e}"
-            log("info", fmt.format(learner.epoch + 1, learner.rate, avg_loss))
+            log("info", fmt.format(learner.epoch + 1, learner.rate, avg_loss),
+                update=True)
 
     measure_error()
 
