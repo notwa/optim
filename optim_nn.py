@@ -132,6 +132,38 @@ class DenseOneLess(Dense):
         np.fill_diagonal(self.dcoeffs, 0)
         return dX
 
+class CosineDense(Dense):
+    # paper: https://arxiv.org/abs/1702.05870
+    # another implementation: https://github.com/farizrahman4u/keras-contrib/pull/36
+    # the paper doesn't mention bias,
+    # so we treat bias as an additional weight with a constant input of 1.
+    # this is correct in Dense layers, so i hope it's correct here too.
+
+    eps = 1e-4
+
+    def F(self, X):
+        self.X = X
+        self.X_norm = np.sqrt(np.square(X).sum(-1, keepdims=True) \
+          + 1 + self.eps)
+        self.W_norm = np.sqrt(np.square(self.coeffs).sum(0, keepdims=True) \
+          + np.square(self.biases) + self.eps)
+        self.dot = X.dot(self.coeffs) + self.biases
+        Y = self.dot / (self.X_norm * self.W_norm)
+        return Y
+
+    def dF(self, dY):
+        ddot = dY / self.X_norm / self.W_norm
+        dX_norm = -(dY * self.dot / self.W_norm).sum(-1, keepdims=True) / self.X_norm**2
+        dW_norm = -(dY * self.dot / self.X_norm).sum( 0, keepdims=True) / self.W_norm**2
+
+        self.dcoeffs[:] = self.X.T.dot(ddot)         \
+          + dW_norm / self.W_norm * self.coeffs
+        self.dbiases[:] = ddot.sum(0, keepdims=True) \
+          + dW_norm / self.W_norm * self.biases
+        dX = ddot.dot(self.coeffs.T) + dX_norm / self.X_norm * self.X
+
+        return dX
+
 # Rituals {{{1
 
 def stochastic_multiply(W, gamma=0.5, allow_negation=True):
@@ -300,7 +332,6 @@ def _mr_onelesssum(y, width, depth, block, multi, activation, style, FC, d):
         y = merger
     else:
         y = z
-    #y = y.feed(LayerNorm())
     return y
 
 _mr_styles = dict(
@@ -312,6 +343,11 @@ _mr_styles = dict(
 def multiresnet(x, width, depth, block=2, multi=1,
                 activation=Relu, style='batchless',
                 init=init_he_normal):
+    if style == 'cossim':
+        style = 'batchless'
+        DenseClass = CosineDense
+    else:
+        DenseClass = Dense
     if style not in _mr_styles:
         raise Exception('unknown resnet style', style)
 
@@ -320,7 +356,7 @@ def multiresnet(x, width, depth, block=2, multi=1,
 
     for d in range(depth):
         size = width
-        FC = lambda: Dense(size, init)
+        FC = lambda: DenseClass(size, init)
 
         if last_size != size:
             y = y.feed(FC())
@@ -433,8 +469,10 @@ def optim_from_config(config):
         mu = np.exp(-1/d2)
         optim = RMSprop(mu=mu)
     elif config.optim == 'sgd':
-        if config.momentum != 0:
-            optim = Momentum(mu=config.momentum, nesterov=config.nesterov)
+        d1 = config.optim_decay1 if 'optim_decay1' in config else 0
+        if d1 > 0:
+            b1 = np.exp(-1/d1)
+            optim = Momentum(mu=b1, nesterov=config.nesterov)
         else:
             optim = Optimizer()
     else:
@@ -453,6 +491,7 @@ def learner_from_config(config, optim, rscb):
     elif config.learner == 'anneal':
         learner = AnnealingLearner(optim, epochs=config.epochs, rate=config.learn,
                                    halve_every=config.learn_halve_every)
+        log("final learning rate", "{:10.8f}".format(learner.final_rate))
     elif config.learner == 'dumb':
         learner = DumbLearner(optim, epochs=config.epochs, rate=config.learn,
                               halve_every=config.learn_halve_every,
@@ -462,7 +501,6 @@ def learner_from_config(config, optim, rscb):
         log("final learning rate", "{:10.8f}".format(learner.final_rate))
     elif config.learner == 'sgd':
         learner = Learner(optim, epochs=config.epochs, rate=config.learn)
-        log("final learning rate", "{:10.8f}".format(learner.final_rate))
     else:
         raise Exception('unknown learner', config.learner)
 
@@ -559,11 +597,10 @@ def run(program, args=None):
         parallel_style = 'onelesssum',
         activation = 'gelu',
 
-        optim = 'adam',
-        optim_decay1 = 2,   # given in epochs (optional)
-        optim_decay2 = 100, # given in epochs (optional)
-        momentum = 0.90, # only used with SGD
-        nesterov = True, # only used with SGD or Adam
+        optim = 'adam', # note: most features only implemented for Adam
+        optim_decay1 = 2, #  first momentum given in epochs (optional)
+        optim_decay2 = 100, # second momentum given in epochs (optional)
+        nesterov = True,
         batch_size = 64,
 
         # learning parameters
@@ -571,7 +608,7 @@ def run(program, args=None):
         learn = 1e-2,
         epochs = 24,
         learn_halve_every = 16, # only used with anneal/dumb
-        restarts = 2,
+        restarts = 8,
         restart_decay = 0.25, # only used with SGDR
         expando = lambda i: 24 * i,
 
@@ -585,9 +622,9 @@ def run(program, args=None):
 
         # logging/output
         log10_loss = True, # personally, i'm sick of looking linear loss values!
-        #fancy_logs = True, # unimplemented
+        #fancy_logs = True, # unimplemented (can't turn it off yet)
 
-        problem = 3,
+        problem = 2,
         compare = (
             # best results for ~10,000 parameters
             # training/validation pairs for each problem (starting from problem 0):
@@ -595,7 +632,7 @@ def run(program, args=None):
             (7.577717e-04, 1.255284e-03),
             # 1080 epochs on these...
             (1.790511e-07, 2.785208e-07),
-            (2.233277e-08, 3.580281e-08),
+            (  10**-7.774,   10**-7.626),
             (5.266719e-07, 5.832677e-06), # overfitting? bad valid set?
         ),
 

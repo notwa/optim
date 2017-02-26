@@ -33,6 +33,14 @@ def init_he_uniform(size, ins, outs):
     s = np.sqrt(6 / ins)
     return np.random.uniform(-s, s, size=size)
 
+def init_glorot_normal(size, ins, outs):
+    s = np.sqrt(2 / (ins + outs))
+    return np.random.normal(0, s, size=size)
+
+def init_glorot_uniform(size, ins, outs):
+    s = np.sqrt(6 / (ins + outs))
+    return np.random.uniform(-s, s, size=size)
+
 # Loss functions {{{1
 
 class Loss:
@@ -162,8 +170,6 @@ class Adam(Optimizer):
     # * Adam == RMSprop when
     #   Adam.b1 == 0
     #   Adam.b2 == RMSprop.mu
-    #   Adam.b1_t == 0
-    #   Adam.b2_t == 0
 
     def __init__(self, alpha=0.002, b1=0.9, b2=0.999, eps=1e-8):
         self.b1 = _f(b1) # decay term
@@ -372,6 +378,20 @@ class Input(Layer):
     def dF(self, dY):
         #self.dY = dY
         return np.zeros_like(dY)
+
+class Reshape(Layer):
+    def __init__(self, new_shape):
+        super().__init__()
+        self.shape = tuple(new_shape)
+        self.output_shape = self.shape
+
+    def F(self, X):
+        self.batch_size = X.shape[0]
+        return X.reshape(self.batch_size, *self.output_shape)
+
+    def dF(self, dY):
+        assert dY.shape[0] == self.batch_size
+        return dY.reshape(self.batch_size, *self.input_shape)
 
 class Affine(Layer):
     def __init__(self, a=1, b=0):
@@ -654,6 +674,30 @@ class Ritual: # i'm just making up names at this point
 
             predicted = self.learn(batch_inputs, batch_outputs)
             self.update()
+
+            batch_loss = self.measure(predicted, batch_outputs)
+            if np.isnan(batch_loss):
+                raise Exception("nan")
+            cumsum_loss += batch_loss
+            if return_losses:
+                losses.append(batch_loss)
+        avg_loss = cumsum_loss / _f(batch_count)
+        if return_losses:
+            return avg_loss, losses
+        return avg_loss
+
+    def test_batched(self, inputs, outputs, batch_size, return_losses=False):
+        cumsum_loss = _0
+        batch_count = inputs.shape[0] // batch_size
+        losses = []
+        assert inputs.shape[0] % batch_size == 0, \
+          "inputs is not evenly divisible by batch_size" # TODO: lift this restriction
+        for b in range(batch_count):
+            bi = b * batch_size
+            batch_inputs  = inputs[ bi:bi+batch_size]
+            batch_outputs = outputs[bi:bi+batch_size]
+
+            predicted = self.model.forward(batch_inputs)
 
             batch_loss = self.measure(predicted, batch_outputs)
             if np.isnan(batch_loss):
