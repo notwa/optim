@@ -65,6 +65,12 @@ class LayerNorm(Layer):
         self.affine = bool(affine)
         self.size = None
 
+        if self.affine:
+            self.serialized = {
+                'gamma': 'gamma',
+                'beta': 'beta',
+            }
+
     def make_shape(self, shape):
         super().make_shape(shape)
         if len(shape) != 1:
@@ -115,6 +121,11 @@ class LayerNorm(Layer):
 
 class Denses(Layer): # TODO: rename?
     # acts as a separate Dense for each row or column. only for 2D arrays.
+
+    serialized = {
+        'W': 'coeffs',
+        'b': 'biases',
+    }
 
     def __init__(self, dim, init=init_he_uniform, axis=-1):
         super().__init__()
