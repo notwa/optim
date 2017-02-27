@@ -49,7 +49,7 @@ class Loss:
 class CategoricalCrossentropy(Loss):
     # lifted from theano
 
-    def __init__(self, eps=1e-8):
+    def __init__(self, eps=1e-6):
         self.eps = _f(eps)
 
     def F(self, p, y):
@@ -519,14 +519,20 @@ class Dense(Layer):
 
     def F(self, X):
         self.X = X
-        Y = X.dot(self.coeffs) + self.biases
-        return Y
+        return X.dot(self.coeffs) + self.biases
 
     def dF(self, dY):
-        dX = dY.dot(self.coeffs.T)
+        #Y  = np.einsum('ix,xj->ij',  X,  C)
+        #dX = np.einsum('ix,jx->ij', dY,  C)
+        #dC = np.einsum('xi,xj->ij',  X, dY)
+        # or rather
+        #Y  = np.einsum('ix,xj->ij',  X,  C)
+        #dX = np.einsum('ij,xj->ix', dY,  C)
+        #dC = np.einsum('ix,ij->xj',  X, dY)
+        # that makes sense, just move the pairs around
         self.dcoeffs[:] = self.X.T.dot(dY)
         self.dbiases[:] = dY.sum(0, keepdims=True)
-        return dX
+        return dY.dot(self.coeffs.T)
 
 # Models {{{1
 
