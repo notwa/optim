@@ -63,6 +63,18 @@ class CategoricalCrossentropy(Loss):
         df = (p - y) / (p * (1 - p))
         return df / len(y)
 
+class Accuracy(Loss):
+    # returns percentage of categories correctly predicted.
+    # utilizes max(), so it cannot be used for gradient descent.
+    # use CategoricalCrossentropy for that instead.
+
+    def F(self, p, y):
+        correct = np.argmax(p, axis=-1) == np.argmax(y, axis=-1)
+        return np.mean(correct)
+
+    def dF(self, p, y):
+        raise NotImplementedError("cannot take the gradient of Accuracy")
+
 class ResidualLoss(Loss):
     def F(self, p, y): # mean
         return np.mean(self.f(p - y))
