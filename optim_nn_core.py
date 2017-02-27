@@ -21,6 +21,9 @@ _sqrt2 = _f(np.sqrt(2))
 _invsqrt2 = _f(1/np.sqrt(2))
 _pi = _f(np.pi)
 
+class LayerIncompatibility(Exception):
+    pass
+
 # Initializations {{{1
 
 # note: these are currently only implemented for 2D shapes.
@@ -52,13 +55,13 @@ class CategoricalCrossentropy(Loss):
     def __init__(self, eps=1e-6):
         self.eps = _f(eps)
 
-    def F(self, p, y):
+    def forward(self, p, y):
         # TODO: assert dimensionality and p > 0 (if not self.unsafe?)
         p = np.clip(p, self.eps, 1 - self.eps)
         f = np.sum(-y * np.log(p) - (1 - y) * np.log(1 - p), axis=-1)
         return np.mean(f)
 
-    def dF(self, p, y):
+    def backward(self, p, y):
         p = np.clip(p, self.eps, 1 - self.eps)
         df = (p - y) / (p * (1 - p))
         return df / len(y)
@@ -68,18 +71,18 @@ class Accuracy(Loss):
     # utilizes max(), so it cannot be used for gradient descent.
     # use CategoricalCrossentropy for that instead.
 
-    def F(self, p, y):
+    def forward(self, p, y):
         correct = np.argmax(p, axis=-1) == np.argmax(y, axis=-1)
         return np.mean(correct)
 
-    def dF(self, p, y):
+    def backward(self, p, y):
         raise NotImplementedError("cannot take the gradient of Accuracy")
 
 class ResidualLoss(Loss):
-    def F(self, p, y): # mean
+    def forward(self, p, y):
         return np.mean(self.f(p - y))
 
-    def dF(self, p, y): # dmean
+    def backward(self, p, y):
         ret = self.df(p - y) / len(y)
         return ret
 
@@ -218,7 +221,7 @@ class Adam(Optimizer):
 class Nadam(Optimizer):
     # paper: https://arxiv.org/abs/1412.6980
     # paper: http://cs229.stanford.edu/proj2015/054_report.pdf
-    # TODO; double-check this implementation. also actually read the damn paper.
+    # TODO: double-check this implementation. also read the damn paper.
     # lifted from https://github.com/fchollet/keras/blob/5d38b04/keras/optimizers.py#L530
     # lifted from https://github.com/jpilaul/IFT6266_project/blob/master/Models/Algo_Momentum.py
 
@@ -282,10 +285,10 @@ class Layer:
 
     # methods we might want to override:
 
-    def F(self, X):
+    def forward(self, X):
         raise NotImplementedError("unimplemented", self)
 
-    def dF(self, dY):
+    def backward(self, dY):
         raise NotImplementedError("unimplemented", self)
 
     def do_feed(self, child):
@@ -301,21 +304,21 @@ class Layer:
             self.output_shape = shape
         return shape
 
-    # TODO: rename this multi and B crap to something actually relevant.
+    # TODO: better names for these (still)
 
-    def multi(self, B):
+    def _propogate(self, edges):
         if not self.unsafe:
-            assert len(B) == 1, self
-        return self.F(B[0])
+            assert len(edges) == 1, self
+        return self.forward(edges[0])
 
-    def dmulti(self, dB):
-        if len(dB) == 1:
-            return self.dF(dB[0])
-        return sum((self.dF(dY) for dY in dB))
+    def _backpropogate(self, edges):
+        if len(edges) == 1:
+            return self.backward(edges[0])
+        return sum((self.backward(dY) for dY in edges))
 
     # general utility methods:
 
-    def compatible(self, parent):
+    def is_compatible(self, parent):
         if self.input_shape is None:
             # inherit shape from output
             shape = self.make_shape(parent.output_shape)
@@ -325,9 +328,9 @@ class Layer:
         return np.all(self.input_shape == parent.output_shape)
 
     def feed(self, child):
-        if not child.compatible(self):
+        if not child.is_compatible(self):
             fmt = "{} is incompatible with {}: shape mismatch: {} vs. {}"
-            raise Exception(fmt.format(self, child, self.output_shape, child.input_shape))
+            raise LayerIncompatibility(fmt.format(self, child, self.output_shape, child.input_shape))
         self.do_feed(child)
         child.be_fed(self)
         return child
@@ -344,32 +347,32 @@ class Layer:
         self.W = W
         self.dW = dW
 
-    def forward(self, lut):
+    def propagate(self, values):
         if not self.unsafe:
             assert self.parents, self
-        B = []
+        edges = []
         for parent in self.parents:
             # TODO: skip over irrelevant nodes (if any)
-            X = lut[parent]
+            X = values[parent]
             if not self.unsafe:
                 self.validate_input(X)
-            B.append(X)
-        Y = self.multi(B)
+            edges.append(X)
+        Y = self._propogate(edges)
         if not self.unsafe:
             self.validate_output(Y)
         return Y
 
-    def backward(self, lut):
+    def backpropagate(self, values):
         if not self.unsafe:
             assert self.children, self
-        dB = []
+        edges = []
         for child in self.children:
             # TODO: skip over irrelevant nodes (if any)
-            dY = lut[child]
+            dY = values[child]
             if not self.unsafe:
                 self.validate_output(dY)
-            dB.append(dY)
-        dX = self.dmulti(dB)
+            edges.append(dY)
+        dX = self._backpropogate(edges)
         if not self.unsafe:
             self.validate_input(dX)
         return dX
@@ -384,10 +387,10 @@ class Input(Layer):
         self.input_shape = self.shape
         self.output_shape = self.shape
 
-    def F(self, X):
+    def forward(self, X):
         return X
 
-    def dF(self, dY):
+    def backward(self, dY):
         #self.dY = dY
         return np.zeros_like(dY)
 
@@ -397,11 +400,11 @@ class Reshape(Layer):
         self.shape = tuple(new_shape)
         self.output_shape = self.shape
 
-    def F(self, X):
+    def forward(self, X):
         self.batch_size = X.shape[0]
         return X.reshape(self.batch_size, *self.output_shape)
 
-    def dF(self, dY):
+    def backward(self, dY):
         assert dY.shape[0] == self.batch_size
         return dY.reshape(self.batch_size, *self.input_shape)
 
@@ -411,11 +414,11 @@ class Flatten(Layer):
         self.output_shape = (np.prod(shape),)
         return shape
 
-    def F(self, X):
+    def forward(self, X):
         self.batch_size = X.shape[0]
         return X.reshape(self.batch_size, *self.output_shape)
 
-    def dF(self, dY):
+    def backward(self, dY):
         assert dY.shape[0] == self.batch_size
         return dY.reshape(self.batch_size, *self.input_shape)
 
@@ -425,42 +428,42 @@ class Affine(Layer):
         self.a = _f(a)
         self.b = _f(b)
 
-    def F(self, X):
+    def forward(self, X):
         return self.a * X + self.b
 
-    def dF(self, dY):
+    def backward(self, dY):
         return dY * self.a
 
 class Sum(Layer):
-    def multi(self, B):
-        return np.sum(B, axis=0)
+    def _propogate(self, edges):
+        return np.sum(edges, axis=0)
 
-    def dmulti(self, dB):
-        #assert len(dB) == 1, "unimplemented"
-        return dB[0] # TODO: does this always work?
+    def _backpropogate(self, edges):
+        #assert len(edges) == 1, "unimplemented"
+        return edges[0] # TODO: does this always work?
 
 class Sigmoid(Layer): # aka Logistic
-    def F(self, X):
+    def forward(self, X):
         self.sig = sigmoid(X)
         return self.sig
 
-    def dF(self, dY):
+    def backward(self, dY):
         return dY * self.sig * (1 - self.sig)
 
 class Tanh(Layer):
-    def F(self, X):
+    def forward(self, X):
         self.sig = np.tanh(X)
         return self.sig
 
-    def dF(self, dY):
+    def backward(self, dY):
         return dY * (1 - self.sig * self.sig)
 
 class Relu(Layer):
-    def F(self, X):
+    def forward(self, X):
         self.cond = X >= 0
         return np.where(self.cond, X, 0)
 
-    def dF(self, dY):
+    def backward(self, dY):
         return np.where(self.cond, dY, 0)
 
 class Elu(Layer):
@@ -470,24 +473,24 @@ class Elu(Layer):
         super().__init__()
         self.alpha = _f(alpha)
 
-    def F(self, X):
+    def forward(self, X):
         self.cond = X >= 0
         self.neg = np.exp(X) - 1
         return np.where(self.cond, X, self.neg)
 
-    def dF(self, dY):
+    def backward(self, dY):
         return dY * np.where(self.cond, 1, self.neg + 1)
 
 class GeluApprox(Layer):
     # paper: https://arxiv.org/abs/1606.08415
     #  plot: https://www.desmos.com/calculator/ydzgtccsld
 
-    def F(self, X):
+    def forward(self, X):
         self.a = 1.704 * X
         self.sig = sigmoid(self.a)
         return X * self.sig
 
-    def dF(self, dY):
+    def backward(self, dY):
         return dY * self.sig * (1 + self.a * (1 - self.sig))
 
 class Softmax(Layer):
@@ -497,14 +500,14 @@ class Softmax(Layer):
         super().__init__()
         self.axis = int(axis)
 
-    def F(self, X):
+    def forward(self, X):
         alpha = np.max(X, axis=-1, keepdims=True)
         num = np.exp(X - alpha)
         den = np.sum(num, axis=-1, keepdims=True)
         self.sm = num / den
         return self.sm
 
-    def dF(self, dY):
+    def backward(self, dY):
         dYsm = dY * self.sm
         dX = dYsm - np.sum(dYsm, axis=-1, keepdims=True) * self.sm
         return dX
@@ -543,19 +546,11 @@ class Dense(Layer):
 
         self.std = np.std(self.W)
 
-    def F(self, X):
+    def forward(self, X):
         self.X = X
         return X.dot(self.coeffs) + self.biases
 
-    def dF(self, dY):
-        #Y  = np.einsum('ix,xj->ij',  X,  C)
-        #dX = np.einsum('ix,jx->ij', dY,  C)
-        #dC = np.einsum('xi,xj->ij',  X, dY)
-        # or rather
-        #Y  = np.einsum('ix,xj->ij',  X,  C)
-        #dX = np.einsum('ij,xj->ix', dY,  C)
-        #dC = np.einsum('ix,ij->xj',  X, dY)
-        # that makes sense, just move the pairs around
+    def backward(self, dY):
         self.dcoeffs[:] = self.X.T.dot(dY)
         self.dbiases[:] = dY.sum(0, keepdims=True)
         return dY.dot(self.coeffs.T)
@@ -602,20 +597,20 @@ class Model:
         return nodes
 
     def forward(self, X):
-        lut = dict()
+        values = dict()
         input_node = self.ordered_nodes[0]
         output_node = self.ordered_nodes[-1]
-        lut[input_node] = input_node.multi(np.expand_dims(X, 0))
+        values[input_node] = input_node._propogate(np.expand_dims(X, 0))
         for node in self.ordered_nodes[1:]:
-            lut[node] = node.forward(lut)
-        return lut[output_node]
+            values[node] = node.propagate(values)
+        return values[output_node]
 
     def backward(self, error):
-        lut = dict()
+        values = dict()
         output_node = self.ordered_nodes[-1]
-        lut[output_node] = output_node.dmulti(np.expand_dims(error, 0))
+        values[output_node] = output_node._backpropogate(np.expand_dims(error, 0))
         for node in reversed(self.ordered_nodes[:-1]):
-            lut[node] = node.backward(lut)
+            values[node] = node.backpropagate(values)
         return self.dW
 
     def load_weights(self, fn):
@@ -670,10 +665,10 @@ class Ritual: # i'm just making up names at this point
         self.bn = 0
 
     def measure(self, p, y):
-        return self.mloss.F(p, y)
+        return self.mloss.forward(p, y)
 
     def derive(self, p, y):
-        return self.loss.dF(p, y)
+        return self.loss.backward(p, y)
 
     def learn(self, inputs, outputs):
         predicted = self.model.forward(inputs)

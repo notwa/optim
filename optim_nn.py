@@ -85,7 +85,7 @@ class LayerNorm(Layer):
         self.gamma[:] = 1
         self.beta[:] = 0
 
-    def F(self, X):
+    def forward(self, X):
         self.mean = X.mean(0)
         self.center = X - self.mean
         self.var = self.center.var(0) + self.eps
@@ -96,7 +96,7 @@ class LayerNorm(Layer):
             return self.gamma * self.Xnorm + self.beta
         return self.Xnorm
 
-    def dF(self, dY):
+    def backward(self, dY):
         length = dY.shape[0]
 
         if self.affine:
@@ -161,14 +161,14 @@ class Denses(Layer): # TODO: rename?
 
         self.std = np.std(self.W)
 
-    def F(self, X):
+    def forward(self, X):
         self.X = X
         if self.axis == 0:
             return np.einsum('ixj,xjk->ikj', X, self.coeffs) + self.biases
         elif self.axis == 1:
             return np.einsum('ijx,jxk->ijk', X, self.coeffs) + self.biases
 
-    def dF(self, dY):
+    def backward(self, dY):
         self.dbiases[:] = dY.sum(0, keepdims=True)
         if self.axis == 0:
             self.dcoeffs[:] = np.einsum('ixj,ikj->xjk', self.X, dY)
@@ -183,12 +183,12 @@ class DenseOneLess(Dense):
         ins, outs = self.input_shape[0], self.output_shape[0]
         assert ins == outs, (ins, outs)
 
-    def F(self, X):
+    def forward(self, X):
         np.fill_diagonal(self.coeffs, 0)
         self.X = X
         return X.dot(self.coeffs) + self.biases
 
-    def dF(self, dY):
+    def backward(self, dY):
         self.dcoeffs[:] = self.X.T.dot(dY)
         self.dbiases[:] = dY.sum(0, keepdims=True)
         np.fill_diagonal(self.dcoeffs, 0)
@@ -203,7 +203,7 @@ class CosineDense(Dense):
 
     eps = 1e-4
 
-    def F(self, X):
+    def forward(self, X):
         self.X = X
         self.X_norm = np.sqrt(np.square(X).sum(-1, keepdims=True) \
           + 1 + self.eps)
@@ -213,7 +213,7 @@ class CosineDense(Dense):
         Y = self.dot / (self.X_norm * self.W_norm)
         return Y
 
-    def dF(self, dY):
+    def backward(self, dY):
         ddot = dY / self.X_norm / self.W_norm
         dX_norm = -(dY * self.dot / self.W_norm).sum(-1, keepdims=True) / self.X_norm**2
         dW_norm = -(dY * self.dot / self.X_norm).sum( 0, keepdims=True) / self.W_norm**2
