@@ -723,7 +723,7 @@ class Ritual: # i'm just making up names at this point
             batch_outputs = outputs[bi:bi+batch_size]
 
             if not test_only and self.learner.per_batch:
-                    self.learner.batch(b / batch_count)
+                self.learner.batch(b / batch_count)
 
             predicted = self.learn(batch_inputs, batch_outputs)
             if not test_only:
