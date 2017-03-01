@@ -874,3 +874,39 @@ class SGDR(Learner):
             if self.restart_callback is not None:
                 self.restart_callback(restart)
         return True
+
+class TriangularCLR(Learner):
+    # note: i haven't actually read (nor seen) the paper(s) on CLR,
+    # but this case (triangular) should be pretty difficult to get wrong.
+
+    per_batch = True
+
+    def __init__(self, optim, epochs=400, upper_rate=None, lower_rate=0,
+                 frequency=100, callback=None):
+        # NOTE: start_rate is treated as upper_rate
+        self.frequency = int(frequency)
+        assert self.frequency > 0
+        self.callback = callback
+        self.lower_rate = _f(lower_rate)
+        super().__init__(optim, epochs, upper_rate)
+
+    def _t(self, epoch):
+        # NOTE: this could probably be simplified
+        offset = self.frequency / 2
+        return np.abs(((epoch + offset) % self.frequency) - offset) / offset
+
+    def rate_at(self, epoch):
+        # NOTE: start_rate is treated as upper_rate
+        return self._t(epoch) * (self.start_rate - self.lower_rate) + self.lower_rate
+
+    def next(self):
+        if not super().next():
+            return False
+        if self.epoch > 1 and self.epoch % self.frequency == 0:
+            if self.callback is not None:
+                self.callback(self.epoch // self.frequency)
+        return True
+
+class SineCLR(TriangularCLR):
+    def _t(self, epoch):
+        return np.sin(_pi * _inv2 * super()._t(epoch))

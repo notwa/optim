@@ -5,15 +5,15 @@ from optim_nn_core import _f
 
 #np.random.seed(42069)
 
-#           train loss:   4.194040e-02
-#       train accuracy:    99.46%
-#           valid loss:   1.998158e-01
-#       valid accuracy:    97.26%
+#           train loss:   7.048363e-03
+#       train accuracy:    99.96%
+#           valid loss:   3.062232e-01
+#       valid accuracy:    97.22%
 # TODO: add dropout or something to lessen overfitting
 
-lr = 0.01
-epochs = 24
-starts = 2
+lr = 0.0032
+epochs = 125
+starts = 5
 restart_decay = 0.5
 bs = 100
 
@@ -64,9 +64,15 @@ y = y.feed(Softmax())
 model = Model(x, y, unsafe=True)
 
 optim = Adam()
-learner = SGDR(optim, epochs=epochs//starts, rate=lr,
-               restarts=starts - 1, restart_decay=restart_decay,
-               expando=lambda i:0)
+if 0:
+    learner = SGDR(optim, epochs=epochs//starts, rate=lr,
+                   restarts=starts-1, restart_decay=restart_decay,
+                   expando=lambda i:0)
+else:
+#   learner = TriangularCLR(optim, epochs=epochs, lower_rate=0, upper_rate=lr,
+#                           frequency=epochs//starts)
+    learner = SineCLR(optim, epochs=epochs, lower_rate=0, upper_rate=lr,
+                      frequency=epochs//starts)
 
 loss = CategoricalCrossentropy()
 mloss = Accuracy()
@@ -89,9 +95,10 @@ def measure_error(quiet=False):
             log(name + " accuracy", "{:6.2f}%".format(mloss * 100))
         return loss, mloss
 
-    loss, mloss = print_error("train", inputs, outputs)
-    train_losses.append(loss)
-    train_mlosses.append(mloss)
+    if not quiet:
+        loss, mloss = print_error("train", inputs, outputs)
+        train_losses.append(loss)
+        train_mlosses.append(mloss)
     loss, mloss = print_error("valid", valid_inputs, valid_outputs)
     valid_losses.append(loss)
     valid_mlosses.append(mloss)
