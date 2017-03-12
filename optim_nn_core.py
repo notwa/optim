@@ -78,6 +78,20 @@ class Accuracy(Loss):
     def backward(self, p, y):
         raise NotImplementedError("cannot take the gradient of Accuracy")
 
+class Confidence(Loss):
+    def forward(self, p, y):
+        categories = y.shape[-1]
+        #confidence = (p - 1/categories) / (1 - categories)
+        #confidence = 1 - np.min(p, axis=-1) * categories
+        confidence = (np.max(p, axis=-1) - 1/categories) / (1 - 1/categories)
+        # there's also an upper bound on confidence
+        # due to the exponent in softmax,
+        # but we don't compensate for that. keep it simple.
+        return np.mean(confidence)
+
+    def backward(self, p, y):
+        raise NotImplementedError("this is probably a bad idea")
+
 class ResidualLoss(Loss):
     def forward(self, p, y):
         return np.mean(self.f(p - y))
@@ -725,8 +739,10 @@ class Ritual: # i'm just making up names at this point
             if not test_only and self.learner.per_batch:
                 self.learner.batch(b / batch_count)
 
-            predicted = self.learn(batch_inputs, batch_outputs)
-            if not test_only:
+            if test_only:
+                predicted = self.model.forward(batch_inputs)
+            else:
+                predicted = self.learn(batch_inputs, batch_outputs)
                 self.update()
 
             if return_losses == 'both':

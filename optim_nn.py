@@ -239,7 +239,7 @@ class CosineDense(Dense):
 
 # Rituals {{{1
 
-def stochastic_multiply(W, gamma=0.5, allow_negation=True):
+def stochastic_multiply(W, gamma=0.5, allow_negation=False):
     # paper: https://arxiv.org/abs/1606.01981
 
     assert W.ndim == 1, W.ndim
@@ -248,7 +248,11 @@ def stochastic_multiply(W, gamma=0.5, allow_negation=True):
     alpha = np.max(np.abs(W))
     # NOTE: numpy gives [low, high) but the paper advocates [low, high]
     mult = np.random.uniform(gamma, 1/gamma, size=size)
-    if allow_negation: # TODO: verify this is correct. seems to wreak havok.
+    if allow_negation:
+        # NOTE: i have yet to see this do anything but cause divergence.
+        # i've referenced the paper several times yet still don't understand
+        # what i'm doing wrong, so i'm disabling it by default in my code.
+        # maybe i just need *a lot* more weights to compensate.
         prob = (W / alpha + 1) / 2
         samples = np.random.random_sample(size=size)
         mult *= np.where(samples < prob, 1, -1)
@@ -275,8 +279,7 @@ class StochMRitual(Ritual):
         self.W[:] = self.model.W
         for layer in self.model.ordered_nodes:
             if isinstance(layer, Dense):
-                stochastic_multiply(layer.coeffs.ravel(), gamma=self.gamma,
-                                    allow_negation=True)
+                stochastic_multiply(layer.coeffs.ravel(), gamma=self.gamma)
         residual = super().learn(inputs, outputs)
         self.model.W[:] = self.W
         return residual
@@ -299,23 +302,25 @@ class NoisyRitual(Ritual):
 
     def learn(self, inputs, outputs):
         # this is pretty crude
-        s = self.input_noise
-        noisy_inputs =   inputs + np.random.normal(0, s, size=inputs.shape)
-        s = self.output_noise
-        noisy_outputs = outputs + np.random.normal(0, s, size=outputs.shape)
-        return super().learn(noisy_inputs, noisy_outputs)
+        if self.input_noise > 0:
+            s = self.input_noise
+            inputs =   inputs + np.random.normal(0, s, size=inputs.shape)
+        if self.output_noise > 0:
+            s = self.output_noise
+            outputs = outputs + np.random.normal(0, s, size=outputs.shape)
+        return super().learn(inputs, outputs)
 
     def update(self):
         # gradient noise paper: https://arxiv.org/abs/1511.06807
         if self.gradient_noise > 0:
             size = len(self.model.dW)
             gamma = 0.55
-            s = self.gradient_noise / (1 + self.bn) ** gamma
+            #s = self.gradient_noise / (1 + self.bn) ** gamma
             # experiments:
-            #s = np.sqrt(self.learner.rate)
+            s = self.gradient_noise * np.sqrt(self.learner.rate)
             #s = np.square(self.learner.rate)
             #s = self.learner.rate / self.en
-            self.model.dW += np.random.normal(0, s, size=size)
+            self.model.dW += np.random.normal(0, max(s, 1e-8), size=size)
         super().update()
 
 # Learners {{{1
@@ -607,8 +612,6 @@ def ritual_from_config(config, learner, loss, mloss):
     return ritual
 
 def model_from_config(config, input_features, output_features, callbacks):
-    # Our Test Model
-
     init = inits[config.init]
     activation = activations[config.activation]
 
@@ -724,6 +727,8 @@ def run(program, args=None):
       toy_data(2**14, 2**11, problem=config.problem)
     input_features  =  inputs.shape[-1]
     output_features = outputs.shape[-1]
+
+    # Our Test Model
 
     callbacks = Dummy()
 
