@@ -56,7 +56,6 @@ class CategoricalCrossentropy(Loss):
         self.eps = _f(eps)
 
     def forward(self, p, y):
-        # TODO: assert dimensionality and p > 0 (if not self.unsafe?)
         p = np.clip(p, self.eps, 1 - self.eps)
         f = np.sum(-y * np.log(p) - (1 - y) * np.log(1 - p), axis=-1)
         return np.mean(f)
@@ -68,7 +67,7 @@ class CategoricalCrossentropy(Loss):
 
 class Accuracy(Loss):
     # returns percentage of categories correctly predicted.
-    # utilizes max(), so it cannot be used for gradient descent.
+    # utilizes argmax(), so it cannot be used for gradient descent.
     # use CategoricalCrossentropy for that instead.
 
     def forward(self, p, y):
@@ -79,18 +78,26 @@ class Accuracy(Loss):
         raise NotImplementedError("cannot take the gradient of Accuracy")
 
 class Confidence(Loss):
+    # this isn't "confidence" in any meaningful way; (e.g. Bayesian)
+    # it's just a metric of how large the value is of the predicted class.
+    # when using it for loss, it acts like a crappy regularizer.
+    # it really just measures how much of a hot-shot the network thinks it is.
+
     def forward(self, p, y=None):
         categories = p.shape[-1]
-        #confidence = (p - 1/categories) / (1 - categories)
-        #confidence = 1 - np.min(p, axis=-1) * categories
         confidence = (np.max(p, axis=-1) - 1/categories) / (1 - 1/categories)
-        # there's also an upper bound on confidence
-        # due to the exponent in softmax,
-        # but we don't compensate for that. keep it simple.
+        # the exponent in softmax puts a maximum on confidence,
+        # but we don't compensate for that.  if necessary,
+        # it'd be better to use an activation that doesn't have this limit.
         return np.mean(confidence)
 
     def backward(self, p, y=None):
-        raise NotImplementedError("this is probably a bad idea")
+        # in order to agree with the forward pass,
+        # using this backwards pass as-is will minimize confidence.
+        categories = p.shape[-1]
+        detc = p / categories / (1 - 1/categories)
+        dmax = p == np.max(p, axis=-1, keepdims=True)
+        return detc * dmax
 
 class ResidualLoss(Loss):
     def forward(self, p, y):
