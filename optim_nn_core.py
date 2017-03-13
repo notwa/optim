@@ -79,8 +79,8 @@ class Accuracy(Loss):
         raise NotImplementedError("cannot take the gradient of Accuracy")
 
 class Confidence(Loss):
-    def forward(self, p, y):
-        categories = y.shape[-1]
+    def forward(self, p, y=None):
+        categories = p.shape[-1]
         #confidence = (p - 1/categories) / (1 - categories)
         #confidence = 1 - np.min(p, axis=-1) * categories
         confidence = (np.max(p, axis=-1) - 1/categories) / (1 - 1/categories)
@@ -89,7 +89,7 @@ class Confidence(Loss):
         # but we don't compensate for that. keep it simple.
         return np.mean(confidence)
 
-    def backward(self, p, y):
+    def backward(self, p, y=None):
         raise NotImplementedError("this is probably a bad idea")
 
 class ResidualLoss(Loss):
