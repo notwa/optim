@@ -77,28 +77,6 @@ class Accuracy(Loss):
     def backward(self, p, y):
         raise NotImplementedError("cannot take the gradient of Accuracy")
 
-class Confidence(Loss):
-    # this isn't "confidence" in any meaningful way; (e.g. Bayesian)
-    # it's just a metric of how large the value is of the predicted class.
-    # when using it for loss, it acts like a crappy regularizer.
-    # it really just measures how much of a hot-shot the network thinks it is.
-
-    def forward(self, p, y=None):
-        categories = p.shape[-1]
-        confidence = (np.max(p, axis=-1) - 1/categories) / (1 - 1/categories)
-        # the exponent in softmax puts a maximum on confidence,
-        # but we don't compensate for that.  if necessary,
-        # it'd be better to use an activation that doesn't have this limit.
-        return np.mean(confidence)
-
-    def backward(self, p, y=None):
-        # in order to agree with the forward pass,
-        # using this backwards pass as-is will minimize confidence.
-        categories = p.shape[-1]
-        detc = p / categories / (1 - 1/categories)
-        dmax = p == np.max(p, axis=-1, keepdims=True)
-        return detc * dmax
-
 class ResidualLoss(Loss):
     def forward(self, p, y):
         return np.mean(self.f(p - y))
@@ -327,12 +305,12 @@ class Layer:
 
     # TODO: better names for these (still)
 
-    def _propogate(self, edges):
+    def _propagate(self, edges):
         if not self.unsafe:
             assert len(edges) == 1, self
         return self.forward(edges[0])
 
-    def _backpropogate(self, edges):
+    def _backpropagate(self, edges):
         if len(edges) == 1:
             return self.backward(edges[0])
         return sum((self.backward(dY) for dY in edges))
@@ -378,7 +356,7 @@ class Layer:
             if not self.unsafe:
                 self.validate_input(X)
             edges.append(X)
-        Y = self._propogate(edges)
+        Y = self._propagate(edges)
         if not self.unsafe:
             self.validate_output(Y)
         return Y
@@ -393,7 +371,7 @@ class Layer:
             if not self.unsafe:
                 self.validate_output(dY)
             edges.append(dY)
-        dX = self._backpropogate(edges)
+        dX = self._backpropagate(edges)
         if not self.unsafe:
             self.validate_input(dX)
         return dX
@@ -443,7 +421,7 @@ class Flatten(Layer):
         assert dY.shape[0] == self.batch_size
         return dY.reshape(self.batch_size, *self.input_shape)
 
-class Affine(Layer):
+class ConstAffine(Layer):
     def __init__(self, a=1, b=0):
         super().__init__()
         self.a = _f(a)
@@ -456,10 +434,10 @@ class Affine(Layer):
         return dY * self.a
 
 class Sum(Layer):
-    def _propogate(self, edges):
+    def _propagate(self, edges):
         return np.sum(edges, axis=0)
 
-    def _backpropogate(self, edges):
+    def _backpropagate(self, edges):
         #assert len(edges) == 1, "unimplemented"
         return edges[0] # TODO: does this always work?
 
@@ -515,8 +493,6 @@ class GeluApprox(Layer):
         return dY * self.sig * (1 + self.a * (1 - self.sig))
 
 class Softmax(Layer):
-    # lifted from theano
-
     def __init__(self, axis=-1):
         super().__init__()
         self.axis = int(axis)
@@ -529,9 +505,19 @@ class Softmax(Layer):
         return self.sm
 
     def backward(self, dY):
-        dYsm = dY * self.sm
-        dX = dYsm - np.sum(dYsm, axis=-1, keepdims=True) * self.sm
-        return dX
+        return (dY - np.sum(dY * self.sm, axis=-1, keepdims=True)) * self.sm
+
+class LogSoftmax(Softmax):
+    def __init__(self, axis=-1, eps=1e-6):
+        super().__init__()
+        self.axis = int(axis)
+        self.eps = _f(eps)
+
+    def forward(self, X):
+        return np.log(super().forward(X) + self.eps)
+
+    def backward(self, dY):
+        return dY - np.sum(dY, axis=-1, keepdims=True) * self.sm
 
 # Parametric Layers {{{1
 
@@ -626,7 +612,7 @@ class Model:
         values = dict()
         input_node = self.ordered_nodes[0]
         output_node = self.ordered_nodes[-1]
-        values[input_node] = input_node._propogate(np.expand_dims(X, 0))
+        values[input_node] = input_node._propagate(np.expand_dims(X, 0))
         for node in self.ordered_nodes[1:]:
             values[node] = node.propagate(values)
         return values[output_node]
@@ -634,7 +620,7 @@ class Model:
     def backward(self, error):
         values = dict()
         output_node = self.ordered_nodes[-1]
-        values[output_node] = output_node._backpropogate(np.expand_dims(error, 0))
+        values[output_node] = output_node._backpropagate(np.expand_dims(error, 0))
         for node in reversed(self.ordered_nodes[:-1]):
             values[node] = node.backpropagate(values)
         return self.dW
