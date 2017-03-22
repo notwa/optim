@@ -161,14 +161,14 @@ while learner.next():
         batch_size=bs,
         return_losses='both')
     fmt = "rate {:10.8f}, loss {:12.6e}, accuracy {:6.2f}%"
-    log("epoch {}".format(learner.epoch + 1),
+    log("epoch {}".format(learner.epoch),
         fmt.format(learner.rate, avg_loss, avg_mloss * 100))
 
     batch_losses += losses
     batch_mlosses += mlosses
 
     if measure_every_epoch:
-        quiet = learner.epoch + 1 != learner.epochs
+        quiet = learner.epoch != learner.epochs
         measure_error(quiet=quiet)
 
 if not measure_every_epoch:

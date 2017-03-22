@@ -859,11 +859,11 @@ def run(program, args=None):
 
         if config.log10_loss:
             fmt = "epoch {:4.0f}, rate {:10.8f}, log10-loss {:+6.3f}"
-            log("info", fmt.format(learner.epoch + 1, learner.rate, np.log10(avg_loss)),
+            log("info", fmt.format(learner.epoch, learner.rate, np.log10(avg_loss)),
                 update=True)
         else:
             fmt = "epoch {:4.0f}, rate {:10.8f}, loss {:12.6e}"
-            log("info", fmt.format(learner.epoch + 1, learner.rate, avg_loss),
+            log("info", fmt.format(learner.epoch, learner.rate, avg_loss),
                 update=True)
 
     measure_error()
