@@ -585,8 +585,7 @@ class Dense(Layer):
     def make_shape(self, parent):
         shape = parent.output_shape
         self.input_shape = shape
-        if len(shape) != 1:
-            return False
+        assert len(shape) == 1, shape
         self.coeffs.shape = (shape[0], self.dim)
         self.biases.shape = (1, self.dim)
 

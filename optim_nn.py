@@ -106,8 +106,7 @@ class LayerNorm(Layer):
         shape = parent.output_shape
         self.input_shape = shape
         self.output_shape = shape
-        if len(shape) != 1:
-            return False
+        assert len(shape) == 1, shape
         if self.affine:
             self.gamma.shape = (shape[0],)
             self.beta.shape = (shape[0],)
@@ -159,8 +158,7 @@ class Denses(Layer): # TODO: rename?
     def make_shape(self, parent):
         shape = parent.output_shape
         self.input_shape = shape
-        if len(shape) != 2:
-            return False
+        assert len(shape) == 2, shape
 
         assert -len(shape) <= self.axis < len(shape)
         self.axis = self.axis % len(shape)
