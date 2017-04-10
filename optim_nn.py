@@ -101,8 +101,9 @@ class LayerNorm(Layer):
                 'beta': 'beta',
             }
 
-    def make_shape(self, shape):
-        super().make_shape(shape)
+    def make_shape(self, parent):
+        shape = parent.output_shape
+        self.input_shape = shape
         if len(shape) != 1:
             return False
         self.features = shape[0]
@@ -164,8 +165,9 @@ class Denses(Layer): # TODO: rename?
         self.axis = int(axis)
         self.size = None
 
-    def make_shape(self, shape):
-        super().make_shape(shape)
+    def make_shape(self, parent):
+        shape = parent.output_shape
+        self.input_shape = shape
         if len(shape) != 2:
             return False
 
