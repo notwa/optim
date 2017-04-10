@@ -147,13 +147,13 @@ class Denses(Layer): # TODO: rename?
         'b': 'biases',
     }
 
-    def __init__(self, dim, init=init_he_uniform, axis=-1):
+    def __init__(self, dim, init=init_he_uniform, reg_w=None, reg_b=None, axis=-1):
         super().__init__()
         self.dim = int(dim)
         self.weight_init = init
         self.axis = int(axis)
-        self.coeffs = self._new_weights('coeffs', init=init)
-        self.biases = self._new_weights('biases', init=init_zeros)
+        self.coeffs = self._new_weights('coeffs', init=init, regularizer=reg_w)
+        self.biases = self._new_weights('biases', init=init_zeros, regularizer=reg_b)
 
     def make_shape(self, parent):
         shape = parent.output_shape

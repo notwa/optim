@@ -105,6 +105,32 @@ class Absolute(ResidualLoss):
     def df(self, r):
         return np.sign(r)
 
+# Regularizers {{{1
+
+class Regularizer:
+    pass
+
+class L1L2(Regularizer):
+    def __init__(self, l1=0.0, l2=0.0):
+        self.l1 = _f(l1)
+        self.l2 = _f(l2)
+
+    def forward(self, X):
+        f = 0.0
+        if self.l1:
+            f += np.sum(self.l1 * np.abs(X))
+        if self.l2:
+            f += np.sum(self.l2 * np.square(X))
+        return f
+
+    def backward(self, X):
+        df = np.zeros_like(X)
+        if self.l1:
+            df += self.l1 * np.sign(X)
+        if self.l2:
+            df += self.l2 * 2 * X
+        return df
+
 # Optimizers {{{1
 
 class Optimizer:
@@ -281,6 +307,7 @@ class Weights:
         self.shape = None
         self.init = None
         self.allocator = None
+        self.regularizer = None
 
         self.configure(**kwargs)
 
@@ -307,6 +334,21 @@ class Weights:
         g[:] = self.init(self.size, *args)
         self.f = f.reshape(self.shape)
         self.g = g.reshape(self.shape)
+
+    def forward(self):
+        if self.regularizer is None:
+            return 0.0
+        return self.regularizer.forward(self.f)
+
+    def backward(self):
+        if self.regularizer is None:
+            return 0.0
+        return self.regularizer.backward(self.f)
+
+    def update(self):
+        if self.regularizer is None:
+            return
+        self.g += self.regularizer.backward(self.f)
 
 # Abstract Layers {{{1
 
@@ -575,12 +617,12 @@ class Dense(Layer):
         'b': 'biases',
     }
 
-    def __init__(self, dim, init=init_he_uniform):
+    def __init__(self, dim, init=init_he_uniform, reg_w=None, reg_b=None):
         super().__init__()
         self.dim = int(dim)
         self.output_shape = (dim,)
-        self.coeffs = self._new_weights('coeffs', init=init)
-        self.biases = self._new_weights('biases', init=init_zeros)
+        self.coeffs = self._new_weights('coeffs', init=init, regularizer=reg_w)
+        self.biases = self._new_weights('biases', init=init_zeros, regularizer=reg_b)
 
     def make_shape(self, parent):
         shape = parent.output_shape
@@ -668,6 +710,18 @@ class Model:
             values[node] = node.backpropagate(values)
         return self.dW
 
+    def regulate_forward(self):
+        loss = _0
+        for node in self.ordered_nodes:
+            for k, w in node.weights.items():
+                loss += w.forward()
+        return loss
+
+    def regulate(self):
+        for node in self.ordered_nodes:
+            for k, w in node.weights.items():
+                w.update()
+
     def load_weights(self, fn):
         # seemingly compatible with keras' Dense layers.
         import h5py
@@ -726,6 +780,7 @@ class Ritual: # i'm just making up names at this point
         self.learner = learner if learner is not None else Learner(Optimizer())
         self.loss = loss if loss is not None else Squared()
         self.mloss = mloss if mloss is not None else loss
+        self.model = None
 
     def reset(self):
         self.learner.reset(optim=True)
@@ -735,12 +790,16 @@ class Ritual: # i'm just making up names at this point
     def measure(self, p, y):
         return self.mloss.forward(p, y)
 
-    def derive(self, p, y):
+    def forward(self, p, y):
+        return self.loss.forward(p, y) + self.model.regulate_forward()
+
+    def backward(self, p, y):
         return self.loss.backward(p, y)
 
     def learn(self, inputs, outputs):
         predicted = self.model.forward(inputs)
-        self.model.backward(self.derive(predicted, outputs))
+        self.model.backward(self.backward(predicted, outputs))
+        self.model.regulate()
         return predicted
 
     def update(self):
@@ -789,7 +848,7 @@ class Ritual: # i'm just making up names at this point
                 self.update()
 
             if return_losses == 'both':
-                batch_loss = self.loss.forward(predicted, batch_outputs)
+                batch_loss = self.forward(predicted, batch_outputs)
                 if np.isnan(batch_loss):
                     raise Exception("nan")
                 losses.append(batch_loss)
@@ -843,7 +902,7 @@ class Ritual: # i'm just making up names at this point
                 self.update()
 
             if return_losses == 'both':
-                batch_loss = self.loss.forward(predicted, batch_outputs)
+                batch_loss = self.forward(predicted, batch_outputs)
                 if np.isnan(batch_loss):
                     raise Exception("nan")
                 losses.append(batch_loss)
