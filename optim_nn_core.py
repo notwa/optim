@@ -4,8 +4,8 @@ _f = np.float32
 # just for speed, not strictly essential:
 from scipy.special import expit as sigmoid
 
-# used for numbering layers like Keras:
-from collections import defaultdict
+# used for numbering layers like Keras, and keeping initialization consistent:
+from collections import defaultdict, OrderedDict
 _layer_counters = defaultdict(lambda: 0)
 
 def _check(a):
@@ -27,6 +27,12 @@ class LayerIncompatibility(Exception):
 # Initializations {{{1
 
 # note: these are currently only implemented for 2D shapes.
+
+def init_zeros(size, ins=None, outs=None):
+    return np.zeros(size)
+
+def init_ones(size, ins=None, outs=None):
+    return np.ones(size)
 
 def init_he_normal(size, ins, outs):
     s = np.sqrt(2 / ins)
@@ -264,19 +270,57 @@ class Nadam(Optimizer):
 
         return -self.alpha * mt_bar / (np.sqrt(vtp) + self.eps)
 
+# Weight container {{{1
+
+class Weights:
+    # we may or may not contain weights -- or any information, for that matter.
+
+    def __init__(self, **kwargs):
+        self.f = None # forward weights
+        self.g = None # backward weights (gradients)
+        self.shape = None
+        self.init = None
+        self.allocator = None
+
+        self.configure(**kwargs)
+
+    def configure(self, **kwargs):
+        for k, v in kwargs.items():
+            getattr(self, k) # ensures the key already exists
+            setattr(self, k, v)
+
+    @property
+    def size(self):
+        assert self.shape is not None
+        return np.prod(self.shape)
+
+    def allocate(self, *args, **kwargs):
+        self.configure(**kwargs)
+
+        # intentionally not using isinstance
+        assert type(self.shape) == tuple, self.shape
+
+        f, g = self.allocator(self.size)
+        assert len(f) == self.size, "{} != {}".format(f.shape, self.size)
+        assert len(g) == self.size, "{} != {}".format(g.shape, self.size)
+        f[:] = self.init(self.size, *args)
+        g[:] = self.init(self.size, *args)
+        self.f = f.reshape(self.shape)
+        self.g = g.reshape(self.shape)
+
 # Abstract Layers {{{1
 
 class Layer:
     def __init__(self):
         self.parents = []
         self.children = []
+        self.weights = OrderedDict()
         self.input_shape = None
         self.output_shape = None
         kind = self.__class__.__name__
         global _layer_counters
         _layer_counters[kind] += 1
         self.name = "{}_{}".format(kind, _layer_counters[kind])
-        self.size = None # total weight count (if any)
         self.unsafe = False # disables assertions for better performance
 
     def __str__(self):
@@ -335,11 +379,20 @@ class Layer:
     def validate_output(self, Y):
         assert Y.shape[1:] == self.output_shape, (str(self), Y.shape[1:], self.output_shape)
 
-    def init(self, W, dW):
-        assert  W.ndim == 1  and W.shape[0] == self.size, W.shape
-        assert dW.ndim == 1 and dW.shape[0] == self.size, dW.shape
-        self.W = W
-        self.dW = dW
+    def _new_weights(self, name, **kwargs):
+        w = Weights(**kwargs)
+        assert name not in self.weights, name
+        self.weights[name] = w
+        return w
+
+    @property
+    def size(self):
+        return sum((w.size for w in self.weights.values()))
+
+    def init(self, allocator):
+        ins, outs = self.input_shape[0], self.output_shape[0]
+        for k, w in self.weights.items():
+            w.allocate(ins, outs, allocator=allocator)
 
     def propagate(self, values):
         if not self.unsafe:
@@ -407,7 +460,6 @@ class Flatten(Layer):
         shape = parent.output_shape
         self.input_shape = shape
         self.output_shape = (np.prod(shape),)
-        return shape
 
     def forward(self, X):
         self.batch_size = X.shape[0]
@@ -527,42 +579,25 @@ class Dense(Layer):
         super().__init__()
         self.dim = int(dim)
         self.output_shape = (dim,)
-        self.weight_init = init
-        self.size = None
+        self.coeffs = self._new_weights('coeffs', init=init)
+        self.biases = self._new_weights('biases', init=init_zeros)
 
     def make_shape(self, parent):
         shape = parent.output_shape
         self.input_shape = shape
         if len(shape) != 1:
             return False
-        self.nW = self.dim * shape[0]
-        self.nb = self.dim
-        self.size = self.nW + self.nb
-        return shape
-
-    def init(self, W, dW):
-        super().init(W, dW)
-
-        ins, outs = self.input_shape[0], self.output_shape[0]
-
-        self.coeffs = self.W[:self.nW].reshape(ins, outs)
-        self.biases = self.W[self.nW:].reshape(1, outs)
-        self.dcoeffs = self.dW[:self.nW].reshape(ins, outs)
-        self.dbiases = self.dW[self.nW:].reshape(1, outs)
-
-        self.coeffs.flat = self.weight_init(self.nW, ins, outs)
-        self.biases.flat = 0
-
-        self.std = np.std(self.W)
+        self.coeffs.shape = (shape[0], self.dim)
+        self.biases.shape = (1, self.dim)
 
     def forward(self, X):
         self.X = X
-        return X.dot(self.coeffs) + self.biases
+        return X.dot(self.coeffs.f) + self.biases.f
 
     def backward(self, dY):
-        self.dcoeffs[:] = self.X.T.dot(dY)
-        self.dbiases[:] = dY.sum(0, keepdims=True)
-        return dY.dot(self.coeffs.T)
+        self.coeffs.g[:] = self.X.T.dot(dY)
+        self.biases.g[:] = dY.sum(0, keepdims=True)
+        return dY.dot(self.coeffs.f.T)
 
 # Models {{{1
 
@@ -578,18 +613,30 @@ class Model:
             node.unsafe = unsafe
 
     def make_weights(self):
-        self.param_count = 0
-        for node in self.ordered_nodes:
-            if node.size is not None:
-                self.param_count += node.size
+        self.param_count = sum((node.size for node in self.ordered_nodes))
         self.W  = np.zeros(self.param_count, dtype=_f)
         self.dW = np.zeros(self.param_count, dtype=_f)
 
         offset = 0
         for node in self.ordered_nodes:
-            if node.size is not None:
+            if node.size > 0:
                 end = offset + node.size
-                node.init(self.W[offset:end], self.dW[offset:end])
+                inner_offset = 0
+
+                def allocate(size):
+                    nonlocal inner_offset
+                    o = offset + inner_offset
+                    ret = self.W[o:o+size], self.dW[o:o+size]
+                    inner_offset += size
+                    assert len(ret[0]) == len(ret[1])
+                    assert size == len(ret[0]), (size, len(ret[0]))
+                    return ret
+
+                node.init(allocate)
+                assert inner_offset <= node.size, "Layer {} allocated more weights than it said it would".format(node)
+                # i don't care if "less" is grammatically incorrect.
+                # you're mom is grammatically incorrect.
+                assert inner_offset >= node.size, "Layer {} allocated less weights than it said it would".format(node)
                 offset += node.size
 
     def traverse(self, nodes, node):
@@ -638,14 +685,14 @@ class Model:
         for k in weights.keys():
             used[k] = False
 
-        nodes = [node for node in self.ordered_nodes if node.size is not None]
+        nodes = [node for node in self.ordered_nodes if node.size > 0]
         for node in nodes:
             full_name = str(node).lower()
             for s_name, o_name in node.serialized.items():
                 key = full_name + '_' + s_name
                 data = weights[key]
                 target = getattr(node, o_name)
-                target[:] = data
+                target.f[:] = data
                 used[key] = True
 
         for k, v in used.items():
@@ -658,7 +705,7 @@ class Model:
 
         counts = defaultdict(lambda: 0)
 
-        nodes = [node for node in self.ordered_nodes if node.size is not None]
+        nodes = [node for node in self.ordered_nodes if node.size > 0]
         for node in nodes:
             full_name = str(node).lower()
             grp = f.create_group(full_name)
@@ -666,7 +713,7 @@ class Model:
                 key = full_name + '_' + s_name
                 target = getattr(node, o_name)
                 data = grp.create_dataset(key, target.shape, dtype=_f)
-                data[:] = target
+                data[:] = target.f
                 counts[key] += 1
                 if counts[key] > 1:
                     lament("WARNING: rewrote weight", key)

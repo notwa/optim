@@ -93,9 +93,10 @@ class LayerNorm(Layer):
         super().__init__()
         self.eps = _f(eps)
         self.affine = bool(affine)
-        self.size = None
 
         if self.affine:
+            self.gamma = self._new_weights('gamma', init=init_ones)
+            self.beta = self._new_weights('beta', init=init_zeros)
             self.serialized = {
                 'gamma': 'gamma',
                 'beta': 'beta',
@@ -104,23 +105,12 @@ class LayerNorm(Layer):
     def make_shape(self, parent):
         shape = parent.output_shape
         self.input_shape = shape
+        self.output_shape = shape
         if len(shape) != 1:
             return False
-        self.features = shape[0]
         if self.affine:
-            self.size = 2 * self.features
-        return shape
-
-    def init(self, W, dW):
-        super().init(W, dW)
-
-        f = self.features
-
-        self.gamma, self.dgamma = self.W[0*f:1*f], self.dW[0*f:1*f]
-        self.beta, self.dbeta   = self.W[1*f:2*f], self.dW[1*f:2*f]
-
-        self.gamma[:] = 1
-        self.beta[:] = 0
+            self.gamma.shape = (shape[0],)
+            self.beta.shape = (shape[0],)
 
     def forward(self, X):
         self.mean = X.mean(0)
@@ -130,16 +120,16 @@ class LayerNorm(Layer):
 
         self.Xnorm = self.center / self.std
         if self.affine:
-            return self.gamma * self.Xnorm + self.beta
+            return self.gamma.f * self.Xnorm + self.beta.f
         return self.Xnorm
 
     def backward(self, dY):
         length = dY.shape[0]
 
         if self.affine:
-            dXnorm = dY * self.gamma
-            self.dgamma[:] = (dY * self.Xnorm).sum(0)
-            self.dbeta[:] = dY.sum(0)
+            dXnorm = dY * self.gamma.f
+            self.gamma.g[:] = (dY * self.Xnorm).sum(0)
+            self.beta.g[:] = dY.sum(0)
         else:
             dXnorm = dY
 
@@ -163,7 +153,8 @@ class Denses(Layer): # TODO: rename?
         self.dim = int(dim)
         self.weight_init = init
         self.axis = int(axis)
-        self.size = None
+        self.coeffs = self._new_weights('coeffs', init=init)
+        self.biases = self._new_weights('biases', init=init_zeros)
 
     def make_shape(self, parent):
         shape = parent.output_shape
@@ -178,64 +169,46 @@ class Denses(Layer): # TODO: rename?
         self.output_shape[self.axis] = self.dim
         self.output_shape = tuple(self.output_shape)
 
-        self.nW = self.dim * np.prod(shape)
-        self.nb = np.prod(self.output_shape)
-        self.size = self.nW + self.nb
-
-        return shape
-
-    def init(self, W, dW):
-        super().init(W, dW)
-
-        ins, outs = np.prod(self.input_shape), np.prod(self.output_shape)
-
         in_rows = self.input_shape[0]
         in_cols = self.input_shape[1]
         out_rows = self.output_shape[0]
         out_cols = self.output_shape[1]
 
-        self.coeffs = self.W[:self.nW].reshape(in_rows, in_cols, self.dim)
-        self.biases = self.W[self.nW:].reshape(1, out_rows, out_cols)
-        self.dcoeffs = self.dW[:self.nW].reshape(self.coeffs.shape)
-        self.dbiases = self.dW[self.nW:].reshape(self.biases.shape)
-
-        self.coeffs.flat = self.weight_init(self.nW, ins, outs)
-        self.biases.flat = 0
-
-        self.std = np.std(self.W)
+        self.coeffs.shape = (in_rows, in_cols, self.dim)
+        self.biases.shape = (1, out_rows, out_cols)
 
     def forward(self, X):
         self.X = X
         if self.axis == 0:
-            return np.einsum('ixj,xjk->ikj', X, self.coeffs) + self.biases
+            return np.einsum('ixj,xjk->ikj', X, self.coeffs.f) + self.biases.f
         elif self.axis == 1:
-            return np.einsum('ijx,jxk->ijk', X, self.coeffs) + self.biases
+            return np.einsum('ijx,jxk->ijk', X, self.coeffs.f) + self.biases.f
 
     def backward(self, dY):
-        self.dbiases[:] = dY.sum(0, keepdims=True)
+        self.biases.g[:] = dY.sum(0, keepdims=True)
         if self.axis == 0:
-            self.dcoeffs[:] = np.einsum('ixj,ikj->xjk', self.X, dY)
-            return np.einsum('ikj,xjk->ixj', dY, self.coeffs)
+            self.coeffs.g[:] = np.einsum('ixj,ikj->xjk', self.X, dY)
+            return np.einsum('ikj,xjk->ixj', dY, self.coeffs.f)
         elif self.axis == 1:
-            self.dcoeffs[:] = np.einsum('ijx,ijk->jxk', self.X, dY)
-            return np.einsum('ijk,jxk->ijx', dY, self.coeffs)
+            self.coeffs.g[:] = np.einsum('ijx,ijk->jxk', self.X, dY)
+            return np.einsum('ijk,jxk->ijx', dY, self.coeffs.f)
 
 class DenseOneLess(Dense):
-    def init(self, W, dW):
-        super().init(W, dW)
+    def init(self, allocator):
+        super().init(allocator)
         ins, outs = self.input_shape[0], self.output_shape[0]
         assert ins == outs, (ins, outs)
 
     def forward(self, X):
-        np.fill_diagonal(self.coeffs, 0)
+        np.fill_diagonal(self.coeffs.f, 0)
         self.X = X
-        return X.dot(self.coeffs) + self.biases
+        return X.dot(self.coeffs.f) + self.biases
 
     def backward(self, dY):
-        self.dcoeffs[:] = self.X.T.dot(dY)
-        self.dbiases[:] = dY.sum(0, keepdims=True)
-        np.fill_diagonal(self.dcoeffs, 0)
-        return dY.dot(self.coeffs.T)
+        self.coeffs.g[:] = self.X.T.dot(dY)
+        self.biases.g[:] = dY.sum(0, keepdims=True)
+        np.fill_diagonal(self.coeffs.g, 0)
+        return dY.dot(self.coeffs.f.T)
 
 class CosineDense(Dense):
     # paper: https://arxiv.org/abs/1702.05870
@@ -250,9 +223,9 @@ class CosineDense(Dense):
         self.X = X
         self.X_norm = np.sqrt(np.square(X).sum(-1, keepdims=True) \
           + 1 + self.eps)
-        self.W_norm = np.sqrt(np.square(self.coeffs).sum(0, keepdims=True) \
-          + np.square(self.biases) + self.eps)
-        self.dot = X.dot(self.coeffs) + self.biases
+        self.W_norm = np.sqrt(np.square(self.coeffs.f).sum(0, keepdims=True) \
+          + np.square(self.biases.f) + self.eps)
+        self.dot = X.dot(self.coeffs.f) + self.biases.f
         Y = self.dot / (self.X_norm * self.W_norm)
         return Y
 
@@ -261,11 +234,11 @@ class CosineDense(Dense):
         dX_norm = -(dY * self.dot / self.W_norm).sum(-1, keepdims=True) / self.X_norm**2
         dW_norm = -(dY * self.dot / self.X_norm).sum( 0, keepdims=True) / self.W_norm**2
 
-        self.dcoeffs[:] = self.X.T.dot(ddot)         \
-          + dW_norm / self.W_norm * self.coeffs
-        self.dbiases[:] = ddot.sum(0, keepdims=True) \
-          + dW_norm / self.W_norm * self.biases
-        dX = ddot.dot(self.coeffs.T) + dX_norm / self.X_norm * self.X
+        self.coeffs.g[:] = self.X.T.dot(ddot)         \
+          + dW_norm / self.W_norm * self.coeffs.f
+        self.biases.g[:] = ddot.sum(0, keepdims=True) \
+          + dW_norm / self.W_norm * self.biases.f
+        dX = ddot.dot(self.coeffs.f.T) + dX_norm / self.X_norm * self.X
 
         return dX
 
@@ -817,7 +790,7 @@ def run(program, args=None):
 
     ritual.prepare(model)
 
-    if training and config.warmup:
+    if training and config.warmup and not config.fn_load:
         log("warming", "up")
 
         # use plain SGD in warmup to prevent (or possibly cause?) numeric issues
