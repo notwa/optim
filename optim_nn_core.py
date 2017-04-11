@@ -374,6 +374,9 @@ class Layer:
     def forward(self, X):
         raise NotImplementedError("unimplemented", self)
 
+    def forward_deterministic(self, X):
+        return self.forward(X)
+
     def backward(self, dY):
         raise NotImplementedError("unimplemented", self)
 
@@ -390,11 +393,13 @@ class Layer:
         self.parents.append(parent)
 
     # TODO: better names for these (still)
-
-    def _propagate(self, edges):
+    def _propagate(self, edges, deterministic):
         if not self.unsafe:
             assert len(edges) == 1, self
-        return self.forward(edges[0])
+        if deterministic:
+            return self.forward_deterministic(edges[0])
+        else:
+            return self.forward(edges[0])
 
     def _backpropagate(self, edges):
         if len(edges) == 1:
@@ -437,7 +442,7 @@ class Layer:
         for k, w in self.weights.items():
             w.allocate(ins, outs, allocator=allocator)
 
-    def propagate(self, values):
+    def propagate(self, values, deterministic):
         if not self.unsafe:
             assert self.parents, self
         edges = []
@@ -447,7 +452,7 @@ class Layer:
             if not self.unsafe:
                 self.validate_input(X)
             edges.append(X)
-        Y = self._propagate(edges)
+        Y = self._propagate(edges, deterministic)
         if not self.unsafe:
             self.validate_output(Y)
         return Y
@@ -525,7 +530,7 @@ class ConstAffine(Layer):
         return dY * self.a
 
 class Sum(Layer):
-    def _propagate(self, edges):
+    def _propagate(self, edges, deterministic):
         return np.sum(edges, axis=0)
 
     def _backpropagate(self, edges):
@@ -545,6 +550,23 @@ class ActivityRegularizer(Layer):
 
     def backward(self, dY):
         return dY + self.reg.backward(self.X)
+
+class Dropout(Layer):
+    def __init__(self, dropout=0.0):
+        super().__init__()
+        self.p = _f(1 - dropout)
+        assert 0 <= self.p <= 1
+
+    def forward(self, X):
+        self.mask = (np.random.rand(*X.shape) < self.p) / self.p
+        return X * self.mask
+
+    def forward_deterministic(self, X):
+        #self.mask = _1
+        return X
+
+    def backward(self, dY):
+        return dY * self.mask
 
 # Activation Layers {{{2
 
@@ -710,13 +732,13 @@ class Model:
             nodes.append(node)
         return nodes
 
-    def forward(self, X):
+    def forward(self, X, deterministic=False):
         values = dict()
         input_node = self.ordered_nodes[0]
         output_node = self.ordered_nodes[-1]
-        values[input_node] = input_node._propagate(np.expand_dims(X, 0))
+        values[input_node] = input_node._propagate(np.expand_dims(X, 0), deterministic)
         for node in self.ordered_nodes[1:]:
-            values[node] = node.propagate(values)
+            values[node] = node.propagate(values, deterministic)
         return values[output_node]
 
     def backward(self, error):
@@ -861,7 +883,7 @@ class Ritual: # i'm just making up names at this point
                 self.learner.batch(b / batch_count)
 
             if test_only:
-                predicted = self.model.forward(batch_inputs)
+                predicted = self.model.forward(batch_inputs, deterministic=True)
             else:
                 predicted = self.learn(batch_inputs, batch_outputs)
                 self.update()
@@ -873,6 +895,7 @@ class Ritual: # i'm just making up names at this point
                 losses.append(batch_loss)
                 cumsum_loss += batch_loss
 
+            # NOTE: this can use the non-deterministic predictions. fixme?
             batch_mloss = self.measure(predicted, batch_outputs)
             if np.isnan(batch_mloss):
                 raise Exception("nan")
@@ -915,7 +938,7 @@ class Ritual: # i'm just making up names at this point
                 self.learner.batch(b / batch_count)
 
             if test_only:
-                predicted = self.model.forward(batch_inputs)
+                predicted = self.model.forward(batch_inputs, deterministic=True)
             else:
                 predicted = self.learn(batch_inputs, batch_outputs)
                 self.update()
@@ -927,6 +950,7 @@ class Ritual: # i'm just making up names at this point
                 losses.append(batch_loss)
                 cumsum_loss += batch_loss
 
+            # NOTE: this can use the non-deterministic predictions. fixme?
             batch_mloss = self.measure(predicted, batch_outputs)
             if np.isnan(batch_mloss):
                 raise Exception("nan")

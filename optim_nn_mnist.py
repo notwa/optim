@@ -26,6 +26,7 @@ if use_emnist:
 
     reg = None
     final_reg = None
+    dropout = None
     actreg_lamb = None
 
     load_fn = None
@@ -53,6 +54,7 @@ else:
 
     reg = L1L2(3.2e-5, 3.2e-4)
     final_reg = L1L2(3.2e-5, 1e-3)
+    dropout = 0.10
     actreg_lamb = None # 1e-3
 
     load_fn = None
@@ -89,14 +91,17 @@ def get_mnist(fn='mnist.npz'):
 
 inputs, outputs, valid_inputs, valid_outputs = get_mnist(fn)
 
-def actreg(y):
-    if not actreg_lamb:
-        return y
-    lamb = actreg_lamb # * np.prod(y.output_shape)
-    reg = SaturateRelu(lamb)
-    act = ActivityRegularizer(reg)
-    reg.lamb_orig = reg.lamb # HACK
-    return y.feed(act)
+def regulate(y):
+    if actreg_lamb:
+        assert type(activation) == Relu, type(activation)
+        lamb = actreg_lamb # * np.prod(y.output_shape)
+        reg = SaturateRelu(lamb)
+        act = ActivityRegularizer(reg)
+        reg.lamb_orig = reg.lamb # HACK
+        y = y.feed(act)
+    if dropout:
+        y = y.feed(Dropout(dropout))
+    return y
 
 x = Input(shape=inputs.shape[1:])
 y = x
@@ -104,7 +109,7 @@ y = x
 y = y.feed(Reshape(new_shape=(mnist_dim, mnist_dim)))
 for i in range(n_denses):
     if i > 0:
-        y = actreg(y)
+        y = regulate(y)
         y = y.feed(activation())
     y = y.feed(Denses(new_dims[0], axis=0, init=init_he_normal,
                       reg_w=reg, reg_b=reg))
@@ -113,11 +118,11 @@ for i in range(n_denses):
 y = y.feed(Flatten())
 for i in range(n_dense):
     if i > 0:
-        y = actreg(y)
+        y = regulate(y)
         y = y.feed(activation())
     y = y.feed(Dense(y.output_shape[0], init=init_he_normal,
                      reg_w=reg, reg_b=reg))
-y = actreg(y)
+y = regulate(y)
 y = y.feed(activation())
 
 y = y.feed(Dense(mnist_classes, init=init_glorot_uniform,
@@ -162,7 +167,7 @@ def measure_error(quiet=False):
         loss, mloss, _, _ = ritual.test_batched(inputs, outputs, bs, return_losses='both')
 
         c = Confidence()
-        predicted = ritual.model.forward(inputs)
+        predicted = ritual.model.forward(inputs, deterministic=True)
         confid = c.forward(predicted)
 
         if not quiet:
