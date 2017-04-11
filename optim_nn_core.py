@@ -50,6 +50,60 @@ def init_glorot_uniform(size, ins, outs):
     s = np.sqrt(6 / (ins + outs))
     return np.random.uniform(-s, s, size=size)
 
+# Weight container {{{1
+
+class Weights:
+    # we may or may not contain weights -- or any information, for that matter.
+
+    def __init__(self, **kwargs):
+        self.f = None # forward weights
+        self.g = None # backward weights (gradients)
+        self.shape = None
+        self.init = None
+        self.allocator = None
+        self.regularizer = None
+
+        self.configure(**kwargs)
+
+    def configure(self, **kwargs):
+        for k, v in kwargs.items():
+            getattr(self, k) # ensures the key already exists
+            setattr(self, k, v)
+
+    @property
+    def size(self):
+        assert self.shape is not None
+        return np.prod(self.shape)
+
+    def allocate(self, *args, **kwargs):
+        self.configure(**kwargs)
+
+        # intentionally not using isinstance
+        assert type(self.shape) == tuple, self.shape
+
+        f, g = self.allocator(self.size)
+        assert len(f) == self.size, "{} != {}".format(f.shape, self.size)
+        assert len(g) == self.size, "{} != {}".format(g.shape, self.size)
+        f[:] = self.init(self.size, *args)
+        g[:] = self.init(self.size, *args)
+        self.f = f.reshape(self.shape)
+        self.g = g.reshape(self.shape)
+
+    def forward(self):
+        if self.regularizer is None:
+            return 0.0
+        return self.regularizer.forward(self.f)
+
+    def backward(self):
+        if self.regularizer is None:
+            return 0.0
+        return self.regularizer.backward(self.f)
+
+    def update(self):
+        if self.regularizer is None:
+            return
+        self.g += self.regularizer.backward(self.f)
+
 # Loss functions {{{1
 
 class Loss:
@@ -296,60 +350,6 @@ class Nadam(Optimizer):
 
         return -self.alpha * mt_bar / (np.sqrt(vtp) + self.eps)
 
-# Weight container {{{1
-
-class Weights:
-    # we may or may not contain weights -- or any information, for that matter.
-
-    def __init__(self, **kwargs):
-        self.f = None # forward weights
-        self.g = None # backward weights (gradients)
-        self.shape = None
-        self.init = None
-        self.allocator = None
-        self.regularizer = None
-
-        self.configure(**kwargs)
-
-    def configure(self, **kwargs):
-        for k, v in kwargs.items():
-            getattr(self, k) # ensures the key already exists
-            setattr(self, k, v)
-
-    @property
-    def size(self):
-        assert self.shape is not None
-        return np.prod(self.shape)
-
-    def allocate(self, *args, **kwargs):
-        self.configure(**kwargs)
-
-        # intentionally not using isinstance
-        assert type(self.shape) == tuple, self.shape
-
-        f, g = self.allocator(self.size)
-        assert len(f) == self.size, "{} != {}".format(f.shape, self.size)
-        assert len(g) == self.size, "{} != {}".format(g.shape, self.size)
-        f[:] = self.init(self.size, *args)
-        g[:] = self.init(self.size, *args)
-        self.f = f.reshape(self.shape)
-        self.g = g.reshape(self.shape)
-
-    def forward(self):
-        if self.regularizer is None:
-            return 0.0
-        return self.regularizer.forward(self.f)
-
-    def backward(self):
-        if self.regularizer is None:
-            return 0.0
-        return self.regularizer.backward(self.f)
-
-    def update(self):
-        if self.regularizer is None:
-            return
-        self.g += self.regularizer.backward(self.f)
-
 # Abstract Layers {{{1
 
 class Layer:
@@ -532,6 +532,22 @@ class Sum(Layer):
         #assert len(edges) == 1, "unimplemented"
         return edges[0] # TODO: does this always work?
 
+class ActivityRegularizer(Layer):
+    def __init__(self, reg):
+        super().__init__()
+        assert isinstance(reg, Regularizer), reg
+        self.reg = reg
+
+    def forward(self, X):
+        self.X = X
+        self.loss = np.sum(self.reg.forward(X))
+        return X
+
+    def backward(self, dY):
+        return dY + self.reg.backward(self.X)
+
+# Activation Layers {{{2
+
 class Sigmoid(Layer): # aka Logistic
     def forward(self, X):
         self.sig = sigmoid(X)
@@ -609,20 +625,6 @@ class LogSoftmax(Softmax):
 
     def backward(self, dY):
         return dY - np.sum(dY, axis=-1, keepdims=True) * self.sm
-
-class ActivityRegularizer(Layer):
-    def __init__(self, reg):
-        super().__init__()
-        assert isinstance(reg, Regularizer), reg
-        self.reg = reg
-
-    def forward(self, X):
-        self.X = X
-        self.loss = np.sum(self.reg.forward(X))
-        return X
-
-    def backward(self, dY):
-        return dY + self.reg.backward(self.X)
 
 # Parametric Layers {{{1
 
