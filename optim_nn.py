@@ -725,12 +725,11 @@ def run(program, args=None):
         compare = (
             # best results for ~10,000 parameters
             # training/validation pairs for each problem (starting from problem 0):
-            #(5.08e-05, 6.78e-05),
-            (7.577717e-04, 1.255284e-03),
+            (10**-3.120, 10**-2.901),
             # 1080 epochs on these...
-            (1.790511e-07, 2.785208e-07),
-            (  10**-7.774,   10**-7.626),
-            (5.266719e-07, 5.832677e-06), # overfitting? bad valid set?
+            (10**-6.747, 10**-6.555),
+            (10**-7.774, 10**-7.626),
+            (10**-6.278, 10**-5.234), # overfitting? bad valid set?
         ),
 
         unsafe = True, # aka gotta go fast mode
