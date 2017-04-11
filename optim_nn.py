@@ -81,6 +81,24 @@ class NLL(Loss): # Negative Log Likelihood
     def backward(self, p, y):
         return -y / len(p)
 
+# Regularizers {{{1
+
+class SaturateRelu(Regularizer):
+    # paper: https://arxiv.org/abs/1703.09202
+    # TODO: test this (and ActivityRegularizer) more thoroughly.
+    #       i've looked at the histogram of the resulting weights.
+    #       it seems like only the layers after this are affected
+    #       the way they should be.
+
+    def __init__(self, lamb=0.0):
+        self.lamb = _f(lamb)
+
+    def forward(self, X):
+        return self.lamb * np.where(X >= 0, X, 0)
+
+    def backward(self, X):
+        return self.lamb * np.where(X >= 0, 1, 0)
+
 # Nonparametric Layers {{{1
 
 # Parametric Layers {{{1

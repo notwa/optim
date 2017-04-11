@@ -116,7 +116,7 @@ class L1L2(Regularizer):
         self.l2 = _f(l2)
 
     def forward(self, X):
-        f = 0.0
+        f = _0
         if self.l1:
             f += np.sum(self.l1 * np.abs(X))
         if self.l2:
@@ -357,6 +357,7 @@ class Layer:
         self.parents = []
         self.children = []
         self.weights = OrderedDict()
+        self.loss = None # for activity regularizers
         self.input_shape = None
         self.output_shape = None
         kind = self.__class__.__name__
@@ -609,6 +610,20 @@ class LogSoftmax(Softmax):
     def backward(self, dY):
         return dY - np.sum(dY, axis=-1, keepdims=True) * self.sm
 
+class ActivityRegularizer(Layer):
+    def __init__(self, reg):
+        super().__init__()
+        assert isinstance(reg, Regularizer), reg
+        self.reg = reg
+
+    def forward(self, X):
+        self.X = X
+        self.loss = np.sum(self.reg.forward(X))
+        return X
+
+    def backward(self, dY):
+        return dY + self.reg.backward(self.X)
+
 # Parametric Layers {{{1
 
 class Dense(Layer):
@@ -713,6 +728,8 @@ class Model:
     def regulate_forward(self):
         loss = _0
         for node in self.ordered_nodes:
+            if node.loss is not None:
+                loss += node.loss
             for k, w in node.weights.items():
                 loss += w.forward()
         return loss
