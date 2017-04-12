@@ -1,7 +1,7 @@
-# random optimization code
+# neural network stuff
 
 not unlike [my dsp repo,](https://github.com/notwa/dsp)
-it's also a bunch of half-baked python code that's kinda handy.
+this is a bunch of half-baked python code that's kinda handy.
 i give no guarantee anything provided here is correct.
 
 don't expect commits, docs, or comments to be any verbose.
