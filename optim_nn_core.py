@@ -570,13 +570,23 @@ class Dropout(Layer):
 
 # Activation Layers {{{2
 
-class Sigmoid(Layer): # aka Logistic
+class Sigmoid(Layer): # aka Logistic, Expit (inverse of Logit)
     def forward(self, X):
         self.sig = sigmoid(X)
         return self.sig
 
     def backward(self, dY):
         return dY * self.sig * (1 - self.sig)
+
+class Softplus(Layer):
+    # integral of Sigmoid.
+
+    def forward(self, X):
+        self.X = X
+        return np.log(1 + np.exp(X))
+
+    def backward(self, dY):
+        return sigmoid(self.X)
 
 class Tanh(Layer):
     def forward(self, X):
@@ -585,6 +595,20 @@ class Tanh(Layer):
 
     def backward(self, dY):
         return dY * (1 - self.sig * self.sig)
+
+class LeCunTanh(Layer):
+    # paper: http://yann.lecun.com/exdb/publis/pdf/lecun-98b.pdf
+    # paper: http://yann.lecun.com/exdb/publis/pdf/lecun-89.pdf
+    # scaled such that f([-1, 1]) = [-1, 1].
+    # helps preserve an input variance of 1.
+    # second derivative peaks around an input of ±1.
+
+    def forward(self, X):
+        self.sig = np.tanh(2 / 3 * X)
+        return 1.7159 * self.sig
+
+    def backward(self, dY):
+        return dY * (2 / 3 * 1.7159) * (1 - self.sig * self.sig)
 
 class Relu(Layer):
     def forward(self, X):

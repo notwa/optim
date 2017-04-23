@@ -468,8 +468,10 @@ def multiresnet(x, width, depth, block=2, multi=1,
 
 # Toy Data {{{1
 
-inits = dict(he_normal=init_he_normal, he_uniform=init_he_uniform)
-activations = dict(sigmoid=Sigmoid, tanh=Tanh, relu=Relu, elu=Elu, gelu=GeluApprox)
+inits = dict(he_normal=init_he_normal, he_uniform=init_he_uniform,
+             glorot_normal=init_glorot_normal, glorot_uniform=init_glorot_uniform)
+activations = dict(sigmoid=Sigmoid, tanh=Tanh, lecun=LeCunTanh,
+                   relu=Relu, elu=Elu, gelu=GeluApprox, softplus=Softplus)
 
 def prettyize(data):
     if isinstance(data, np.ndarray):
@@ -692,10 +694,10 @@ def run(program, args=None):
 
         # style of resnet (order of layers, which layers, etc.)
         parallel_style = 'onelesssum',
-        activation = 'gelu',
+        activation = 'lecun',
 
         optim = 'adam', # note: most features only implemented for Adam
-        optim_decay1 = 2, #  first momentum given in epochs (optional)
+        optim_decay1 = 24,  #  first momentum given in epochs (optional)
         optim_decay2 = 100, # second momentum given in epochs (optional)
         nesterov = True,
         batch_size = 64,
@@ -705,13 +707,13 @@ def run(program, args=None):
         learn = 1e-2,
         epochs = 24,
         learn_halve_every = 16, # only used with anneal/dumb
-        restarts = 8,
+        restarts = 5,
         restart_decay = 0.25, # only used with SGDR
         expando = lambda i: 24 * i,
 
         # misc
-        init = 'he_normal',
-        loss = 'msee',
+        init = 'glorot_uniform',
+        loss = 'mse',
         mloss = 'mse',
         ritual = 'default',
         restart_optim = False, # restarts also reset internal state of optimizer
