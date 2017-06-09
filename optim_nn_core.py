@@ -672,6 +672,16 @@ class LogSoftmax(Softmax):
     def backward(self, dY):
         return dY - np.sum(dY, axis=-1, keepdims=True) * self.sm
 
+class Cos(Layer):
+    # performs well on MNIST for some strange reason.
+
+    def forward(self, X):
+        self.X = X
+        return np.cos(X)
+
+    def backward(self, dY):
+        return dY * -np.sin(self.X)
+
 # Parametric Layers {{{1
 
 class Dense(Layer):
