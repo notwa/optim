@@ -764,7 +764,7 @@ def run(program, args=None):
 
         # style of resnet (order of layers, which layers, etc.)
         parallel_style = 'onelesssum',
-        activation = 'lecun',
+        activation = 'selu',
 
         optim = 'adam', # note: most features only implemented for Adam
         optim_decay1 = 24,  #  first momentum given in epochs (optional)
@@ -774,20 +774,20 @@ def run(program, args=None):
 
         # learning parameters
         learner = 'sgdr',
-        learn = 1e-2,
+        learn = 0.00125,
         epochs = 24,
         learn_halve_every = 16, # only used with anneal/dumb
-        restarts = 5,
+        restarts = 4,
         restart_decay = 0.25, # only used with SGDR
         expando = lambda i: 24 * i,
 
         # misc
-        init = 'glorot_uniform',
+        init = 'gaussian_unit',
         loss = 'mse',
         mloss = 'mse',
         ritual = 'default',
         restart_optim = False, # restarts also reset internal state of optimizer
-        warmup = True, # train a couple epochs on gaussian noise and reset
+        warmup = False, # train a couple epochs on gaussian noise and reset
 
         # logging/output
         log10_loss = True, # personally, i'm sick of looking linear loss values!
@@ -810,6 +810,8 @@ def run(program, args=None):
     for k in ['parallel_style', 'activation', 'optim', 'learner',
               'init', 'loss', 'mloss', 'ritual']:
         config[k] = config[k].lower()
+
+    config.learn *= np.sqrt(config.batch_size)
 
     config.pprint()
 

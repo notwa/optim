@@ -5,27 +5,27 @@ from optim_nn_core import _f
 
 #np.random.seed(42069)
 
-use_emnist = False
+use_emnist = True
 
 measure_every_epoch = True
 
 if use_emnist:
-    lr = 0.01
+    lr = 0.0005
     epochs = 48
     starts = 2
-    bs = 200
+    bs = 400
 
     learner_class = SGDR
     restart_decay = 0.5
 
-    n_dense = 0
-    n_denses = 2
+    n_dense = 2
+    n_denses = 0
     new_dims = (28, 28)
     activation = GeluApprox
 
-    reg = None
-    final_reg = None
-    dropout = None
+    reg = L1L2(3.2e-5, 3.2e-4)
+    final_reg = L1L2(3.2e-5, 1e-3)
+    dropout = 0.05
     actreg_lamb = None
 
     load_fn = None
@@ -37,7 +37,7 @@ if use_emnist:
     mnist_classes = 47
 
 else:
-    lr = 0.01
+    lr = 0.0005
     epochs = 60
     starts = 3
     bs = 500
@@ -129,6 +129,8 @@ y = y.feed(Softmax())
 
 model = Model(x, y, unsafe=True)
 
+lr *= np.sqrt(bs)
+
 optim = Adam()
 if learner_class == SGDR:
     learner = learner_class(optim, epochs=epochs//starts, rate=lr,
@@ -176,7 +178,6 @@ def measure_error(quiet=False):
 
         return loss, mloss, confid
 
-    #if not quiet:
     loss, mloss, confid = print_error("train", inputs, outputs)
     train_losses.append(loss)
     train_mlosses.append(mloss)
