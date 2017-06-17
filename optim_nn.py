@@ -910,11 +910,6 @@ def run(program, args=None):
         measure_error()
 
     while training and learner.next():
-        indices = np.arange(inputs.shape[0])
-        np.random.shuffle(indices)
-        shuffled_inputs = inputs[indices]
-        shuffled_outputs = outputs[indices]
-
         avg_loss, losses = ritual.train_batched(
             shuffled_inputs, shuffled_outputs,
             config.batch_size,

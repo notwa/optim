@@ -946,11 +946,17 @@ class Ritual: # i'm just making up names at this point
         return avg_mloss
 
     def train_batched(self, inputs, outputs, batch_size,
-                      return_losses=False, test_only=False):
+                      return_losses=False, test_only=False, shuffle=True):
         assert isinstance(return_losses, bool) or return_losses == 'both'
 
         if not test_only:
             self.en += 1
+
+        if shuffle:
+            indices = np.arange(inputs.shape[0])
+            np.random.shuffle(indices)
+            inputs = inputs[indices]
+            outputs = outputs[indices]
 
         cumsum_loss, cumsum_mloss = _0, _0
         batch_count = inputs.shape[0] // batch_size

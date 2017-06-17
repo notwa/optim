@@ -196,11 +196,6 @@ while learner.next():
             if isinstance(node, ActivityRegularizer):
                 node.reg.lamb = act_t * node.reg.lamb_orig # HACK
 
-    indices = np.arange(inputs.shape[0])
-    np.random.shuffle(indices)
-    shuffled_inputs = inputs[indices]
-    shuffled_outputs = outputs[indices]
-
     avg_loss, avg_mloss, losses, mlosses = ritual.train_batched(
         shuffled_inputs, shuffled_outputs,
         batch_size=bs,
