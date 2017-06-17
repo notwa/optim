@@ -911,7 +911,7 @@ def run(program, args=None):
 
     while training and learner.next():
         avg_loss, losses = ritual.train_batched(
-            shuffled_inputs, shuffled_outputs,
+            inputs, outputs,
             config.batch_size,
             return_losses=True)
         batch_losses += losses

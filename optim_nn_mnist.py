@@ -197,7 +197,7 @@ while learner.next():
                 node.reg.lamb = act_t * node.reg.lamb_orig # HACK
 
     avg_loss, avg_mloss, losses, mlosses = ritual.train_batched(
-        shuffled_inputs, shuffled_outputs,
+        inputs, outputs,
         batch_size=bs,
         return_losses='both')
     fmt = "rate {:10.8f}, loss {:12.6e}, accuracy {:6.2f}%"
