@@ -27,6 +27,12 @@ def log(left, right, update=False):
 class Dummy:
     pass
 
+# Initializations {{{1
+
+def init_gaussian_unit(size, ins, outs):
+    s = np.sqrt(1 / ins)
+    return np.random.normal(0, s, size=size)
+
 # Loss functions {{{1
 
 class SquaredHalved(ResidualLoss):
@@ -100,6 +106,68 @@ class SaturateRelu(Regularizer):
         return self.lamb * np.where(X >= 0, 1, 0)
 
 # Nonparametric Layers {{{1
+
+class AlphaDropout(Layer):
+    # to be used alongside Selu activations.
+    # paper: https://arxiv.org/abs/1706.02515
+
+    def __init__(self, dropout=0.0, alpha=1.67326324, lamb=1.05070099):
+        super().__init__()
+        self.alpha = _f(alpha)
+        self.lamb = _f(lamb)
+        self.saturated = -self.lamb * self.alpha
+        self.dropout = _f(dropout)
+
+    @property
+    def dropout(self):
+        return self._dropout
+
+    @dropout.setter
+    def dropout(self, x):
+        self._dropout = _f(x)
+        self.q = 1 - self._dropout
+        assert 0 <= self.q <= 1
+
+        sat = self.saturated
+
+        self.a = 1 / np.sqrt(self.q + sat * sat * self.q * self._dropout)
+        self.b = -self.a * (self._dropout * sat)
+
+    def forward(self, X):
+        self.mask = np.random.rand(*X.shape) < self.q
+        return self.a * np.where(self.mask, X, self.saturated) + self.b
+
+    def forward_deterministic(self, X):
+        return X
+
+    def backward(self, dY):
+        return dY * self.a * self.mask
+
+# Activations {{{2
+
+class Selu(Layer):
+    # paper: https://arxiv.org/abs/1706.02515
+
+    def __init__(self, alpha=1.67326324, lamb=1.05070099):
+        super().__init__()
+        self.alpha = _f(alpha)
+        self.lamb = _f(lamb)
+
+    def forward(self, X):
+        self.cond = X >= 0
+        self.neg = self.alpha * np.exp(X)
+        return self.lamb * np.where(self.cond, X, self.neg - self.alpha)
+
+    def backward(self, dY):
+        return dY * self.lamb * np.where(self.cond, 1, self.neg)
+
+class TanhTest(Layer):
+    def forward(self, X):
+        self.sig = np.tanh(1 / 2 * X)
+        return 2.4004 * self.sig
+
+    def backward(self, dY):
+        return dY * (1 / 2 * 2.4004) * (1 - self.sig * self.sig)
 
 # Parametric Layers {{{1
 
@@ -469,9 +537,11 @@ def multiresnet(x, width, depth, block=2, multi=1,
 # Toy Data {{{1
 
 inits = dict(he_normal=init_he_normal, he_uniform=init_he_uniform,
-             glorot_normal=init_glorot_normal, glorot_uniform=init_glorot_uniform)
+             glorot_normal=init_glorot_normal, glorot_uniform=init_glorot_uniform,
+             gaussian_unit=init_gaussian_unit)
 activations = dict(sigmoid=Sigmoid, tanh=Tanh, lecun=LeCunTanh,
-                   relu=Relu, elu=Elu, gelu=GeluApprox, softplus=Softplus)
+                   relu=Relu, elu=Elu, gelu=GeluApprox, selu=Selu,
+                   softplus=Softplus)
 
 def prettyize(data):
     if isinstance(data, np.ndarray):

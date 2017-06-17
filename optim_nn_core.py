@@ -623,7 +623,7 @@ class Elu(Layer):
 
     def __init__(self, alpha=1):
         super().__init__()
-        self.alpha = _f(alpha)
+        self.alpha = _f(alpha) # FIXME: unused
 
     def forward(self, X):
         self.cond = X >= 0
