@@ -258,7 +258,7 @@ class RMSprop(Optimizer):
         #self.g += (dW * dW - self.g) * (1 - self.mu)
 
         # finally sqrt it to complete the running root-mean-square approximation
-        return -self.alpha * dW / np.sqrt(self.g + self.eps)
+        return -self.alpha * dW / (np.sqrt(self.g) + self.eps)
 
 class Adam(Optimizer):
     # paper: https://arxiv.org/abs/1412.6980
@@ -301,7 +301,7 @@ class Adam(Optimizer):
         self.vt[:] = self.b2 * self.vt + (1 - self.b2) * dW * dW
 
         return -self.alpha * (self.mt / (1 - self.b1_t)) \
-                   / np.sqrt((self.vt / (1 - self.b2_t)) + self.eps)
+                   / (np.sqrt(self.vt / (1 - self.b2_t)) + self.eps)
 
 class Nadam(Optimizer):
     # paper: https://arxiv.org/abs/1412.6980
