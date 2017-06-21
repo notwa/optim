@@ -688,7 +688,7 @@ def optim_from_config(config):
         o = Nadam if config.nesterov else Adam
         optim = o(b1=b1, b2=b2)
     elif config.optim == 'ftml':
-        d1 = config.optim_decay1 if 'optim_decay1' in config else 9.5
+        d1 = config.optim_decay1 if 'optim_decay1' in config else 2
         d2 = config.optim_decay2 if 'optim_decay2' in config else 999.5
         b1 = np.exp(-1/d1)
         b2 = np.exp(-1/d2)
