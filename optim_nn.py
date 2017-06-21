@@ -105,6 +105,58 @@ class SaturateRelu(Regularizer):
     def backward(self, X):
         return self.lamb * np.where(X >= 0, 1, 0)
 
+# Optimizers {{{1
+
+class FTML(Optimizer):
+    # paper: http://www.cse.ust.hk/~szhengac/papers/icml17.pdf
+    # author's implementation: https://github.com/szhengac/optim/commit/923555e
+
+    def __init__(self, alpha=0.0025, b1=0.6, b2=0.999, eps=1e-8):
+        self.iterations = _0
+        self.b1 = _f(b1) # decay term
+        self.b2 = _f(b2) # decay term
+        self.eps = _f(eps)
+
+        super().__init__(alpha)
+
+    def reset(self):
+        self.dt1 = None
+        self.dt = None
+        self.vt = None
+        self.zt = None
+        self.b1_t = _1
+        self.b2_t = _1
+
+    def compute(self, dW, W):
+        if self.dt1 is None: self.dt1 = np.zeros_like(dW)
+        if self.dt is None: self.dt = np.zeros_like(dW)
+        if self.vt is None: self.vt = np.zeros_like(dW)
+        if self.zt is None: self.zt = np.zeros_like(dW)
+
+        # NOTE: we could probably rewrite these equations to avoid this copy.
+        self.dt1[:] = self.dt[:]
+
+        self.b1_t *= self.b1
+        self.b2_t *= self.b2
+
+        # hardly an elegant solution.
+        alpha = max(self.alpha, self.eps)
+
+        # same as Adam's vt.
+        self.vt[:] = self.b2 * self.vt + (1 - self.b2) * dW * dW
+
+        # you can factor out "inner" out of Adam as well.
+        inner = np.sqrt(self.vt / (1 - self.b2_t)) + self.eps
+        self.dt[:] = (1 - self.b1_t) / alpha * inner
+
+        sigma_t = self.dt - self.b1 * self.dt1
+
+        # Adam's mt minus the sigma term.
+        self.zt[:] = self.b1 * self.zt + (1 - self.b1) * dW - sigma_t * W
+
+        # subtract by weights to avoid having to override self.update.
+        return -self.zt / self.dt - W
+
 # Nonparametric Layers {{{1
 
 class AlphaDropout(Layer):
@@ -635,6 +687,12 @@ def optim_from_config(config):
         b2 = np.exp(-1/d2)
         o = Nadam if config.nesterov else Adam
         optim = o(b1=b1, b2=b2)
+    elif config.optim == 'ftml':
+        d1 = config.optim_decay1 if 'optim_decay1' in config else 9.5
+        d2 = config.optim_decay2 if 'optim_decay2' in config else 999.5
+        b1 = np.exp(-1/d1)
+        b2 = np.exp(-1/d2)
+        optim = FTML(b1=b1, b2=b2)
     elif config.optim in ('rms', 'rmsprop'):
         d2 = config.optim_decay2 if 'optim_decay2' in config else 99.5
         mu = np.exp(-1/d2)
@@ -764,8 +822,12 @@ def run(program, args=None):
 
         # style of resnet (order of layers, which layers, etc.)
         parallel_style = 'onelesssum',
-        activation = 'selu',
+        activation = 'gelu',
 
+        #optim = 'ftml',
+        #optim_decay1 = 2,
+        #optim_decay2 = 100,
+        #nesterov = False,
         optim = 'adam', # note: most features only implemented for Adam
         optim_decay1 = 24,  #  first momentum given in epochs (optional)
         optim_decay2 = 100, # second momentum given in epochs (optional)
@@ -782,7 +844,7 @@ def run(program, args=None):
         expando = lambda i: 24 * i,
 
         # misc
-        init = 'gaussian_unit',
+        init = 'he_normal',
         loss = 'mse',
         mloss = 'mse',
         ritual = 'default',
