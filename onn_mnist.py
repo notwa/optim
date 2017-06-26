@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 
-from optim_nn import *
-from optim_nn_core import _f
+from onn import *
+from onn_core import _f
 
 #np.random.seed(42069)
 
-use_emnist = True
+use_emnist = False
 
 measure_every_epoch = True
 

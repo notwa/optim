@@ -825,6 +825,7 @@ class Model:
 
         for k, v in used.items():
             if not v:
+                # FIXME: lament undeclared without optim_nn.py!
                 lament("WARNING: unused weight", k)
 
     def save_weights(self, fn, overwrite=False):
@@ -844,6 +845,7 @@ class Model:
                 data[:] = target.f
                 counts[key] += 1
                 if counts[key] > 1:
+                    # FIXME: lament undeclared without optim_nn.py!
                     lament("WARNING: rewrote weight", key)
 
         f.close()
@@ -1084,7 +1086,7 @@ def cosmod(x):
 class SGDR(Learner):
     # Stochastic Gradient Descent with Restarts
     # paper: https://arxiv.org/abs/1608.03983
-    # NOTE: this is missing a couple features.
+    # NOTE: this is missing a couple of the proposed features.
 
     per_batch = True
 
@@ -1099,7 +1101,7 @@ class SGDR(Learner):
         self.expando = expando if expando is not None else lambda i: i
         if type(self.expando) == int:
             inc = self.expando
-            self.expando = self.expando = lambda i: inc
+            self.expando = lambda i: i * inc
 
         self.splits = []
         epochs = 0

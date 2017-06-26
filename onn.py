@@ -6,8 +6,8 @@
 # BIG TODO: ensure numpy isn't upcasting to float64 *anywhere*.
 #           this is gonna take some work.
 
-from optim_nn_core import *
-from optim_nn_core import _check, _f, _0, _1
+from onn_core import *
+from onn_core import _check, _f, _0, _1
 
 import sys
 
