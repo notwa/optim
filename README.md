@@ -41,7 +41,7 @@ numpy scipy h5py sklearn dotmap
 
 ```python
 #!/usr/bin/env python3
-from optim_nn_core import *
+from onn_core import *
 bs = 500
 lr = 0.0005 * np.sqrt(bs)
 reg = L1L2(3.2e-5, 3.2e-4)
