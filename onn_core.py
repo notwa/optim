@@ -734,7 +734,6 @@ class Model:
         offset = 0
         for node in self.ordered_nodes:
             if node.size > 0:
-                end = offset + node.size
                 inner_offset = 0
 
                 def allocate(size):

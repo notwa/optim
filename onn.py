@@ -43,7 +43,7 @@ class SquaredHalved(ResidualLoss):
         return r
 
 class SomethingElse(ResidualLoss):
-    # generalizes Absolute and SquaredHalved
+    # generalizes Absolute and SquaredHalved.
     # plot: https://www.desmos.com/calculator/fagjg9vuz7
     def __init__(self, a=4/3):
         assert 1 <= a <= 2, "parameter out of range"
