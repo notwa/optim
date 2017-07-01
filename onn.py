@@ -11,9 +11,6 @@ from onn_core import _check, _f, _0, _1
 
 import sys
 
-def lament(*args, **kwargs):
-    print(*args, file=sys.stderr, **kwargs)
-
 _log_was_update = False
 def log(left, right, update=False):
     s = "\x1B[1m  {:>20}:\x1B[0m   {}".format(left, right)

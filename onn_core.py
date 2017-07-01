@@ -1,5 +1,8 @@
 import sys
 
+def lament(*args, **kwargs):
+    print(*args, file=sys.stderr, **kwargs)
+
 import numpy as np
 _f = np.float32
 
