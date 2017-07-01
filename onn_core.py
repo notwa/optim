@@ -1,3 +1,5 @@
+import sys
+
 import numpy as np
 _f = np.float32
 
@@ -888,6 +890,15 @@ class Model:
                     lament("WARNING: rewrote weight", key)
 
         f.close()
+
+    def print_graph(self, file=sys.stdout):
+        print('digraph G {', file=file)
+        for node in self.nodes:
+            children = [str(n) for n in node.children]
+            if children:
+                sep = '->'
+                print('\t' + str(node) + sep + (';\n\t' + str(node) + sep).join(children) + ';', file=file)
+        print('}', file=file)
 
 # Rituals {{{1
 

@@ -148,11 +148,7 @@ ritual = Ritual(learner=learner, loss=loss, mloss=mloss)
 #ritual = NoisyRitual(learner=learner, loss=loss, mloss=mloss,
 #                     input_noise=1e-1, output_noise=3.2e-2, gradient_noise=1e-1)
 
-for node in model.ordered_nodes:
-    children = [str(n) for n in node.children]
-    if children:
-        sep = '->'
-        print(str(node) + sep + ('\n' + str(node) + sep).join(children))
+model.print_graph()
 log('parameters', model.param_count)
 
 ritual.prepare(model)

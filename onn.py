@@ -893,13 +893,7 @@ def run(program, args=None):
 
     # Model Information {{{2
 
-    print('digraph G {')
-    for node in model.ordered_nodes:
-        children = [str(n) for n in node.children]
-        if children:
-            sep = '->'
-            print('\t' + str(node) + sep + (';\n\t' + str(node) + sep).join(children) + ';')
-    print('}')
+    model.print_graph()
     log('parameters', model.param_count)
 
     # Training {{{2
