@@ -43,7 +43,7 @@ else:
     starts = 3
     bs = 500
 
-    learner_class = SGDR
+    learner_class = None #SGDR
     restart_decay = 0.5
 
     n_dense = 2
@@ -51,9 +51,9 @@ else:
     new_dims = (4, 12)
     activation = Relu
 
-    reg = L1L2(3.2e-5, 3.2e-4)
-    final_reg = L1L2(3.2e-5, 1e-3)
-    dropout = 0.05
+    reg = None # L1L2(3.2e-5, 3.2e-4)
+    final_reg = None # L1L2(3.2e-5, 1e-3)
+    dropout = None # 0.05
     actreg_lamb = None #1e-4
 
     load_fn = None
@@ -132,7 +132,7 @@ model = Model(x, y, unsafe=True)
 
 lr *= np.sqrt(bs)
 
-optim = Adam()
+optim = YellowFin()
 if learner_class == SGDR:
     learner = learner_class(optim, epochs=epochs//starts, rate=lr,
                             restarts=starts-1, restart_decay=restart_decay,
