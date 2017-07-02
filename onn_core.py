@@ -239,15 +239,15 @@ class L1L2(Regularizer):
 # Optimizers {{{1
 
 class Optimizer:
-    def __init__(self, alpha=0.1):
-        self.alpha = _f(alpha) # learning rate
+    def __init__(self, lr=0.1):
+        self.lr = _f(lr) # learning rate
         self.reset()
 
     def reset(self):
         pass
 
     def compute(self, dW, W):
-        return -self.alpha * dW
+        return -self.lr * dW
 
     def update(self, dW, W):
         W += self.compute(dW, W)
@@ -256,11 +256,11 @@ class Optimizer:
 # https://github.com/tiny-dnn/tiny-dnn/blob/master/tiny_dnn/optimizers/optimizer.h
 
 class Momentum(Optimizer):
-    def __init__(self, alpha=0.01, mu=0.9, nesterov=False):
+    def __init__(self, lr=0.01, mu=0.9, nesterov=False):
         self.mu = _f(mu) # momentum
         self.nesterov = bool(nesterov)
 
-        super().__init__(alpha)
+        super().__init__(lr)
 
     def reset(self):
         self.Vprev = None
@@ -269,10 +269,10 @@ class Momentum(Optimizer):
         if self.Vprev is None:
             self.Vprev = np.copy(dW)
 
-        V = self.mu * self.Vprev - self.alpha * dW
+        V = self.mu * self.Vprev - self.lr * dW
         self.Vprev[:] = V
         if self.nesterov:
-            return self.mu * V - self.alpha * dW
+            return self.mu * V - self.lr * dW
 
         return V
 
@@ -283,7 +283,7 @@ class RMSprop(Optimizer):
     # * RMSprop == Adagrad when
     #   RMSprop.mu == 1
 
-    def __init__(self, alpha=0.0001, mu=0.99, eps=1e-8):
+    def __init__(self, lr=0.0001, mu=0.99, eps=1e-8):
         self.mu = _f(mu) # decay term
         self.eps = _f(eps)
 
@@ -294,7 +294,7 @@ class RMSprop(Optimizer):
         # an input decays to 1/e its original amplitude over 99.5 epochs.
         # (this is from DSP, so how relevant it is in SGD is debatable)
 
-        super().__init__(alpha)
+        super().__init__(lr)
 
     def reset(self):
         self.g = None
@@ -309,7 +309,7 @@ class RMSprop(Optimizer):
         #self.g += (dW * dW - self.g) * (1 - self.mu)
 
         # finally sqrt it to complete the running root-mean-square approximation
-        return -self.alpha * dW / (np.sqrt(self.g) + self.eps)
+        return -self.lr * dW / (np.sqrt(self.g) + self.eps)
 
 class Adam(Optimizer):
     # paper: https://arxiv.org/abs/1412.6980
@@ -321,14 +321,14 @@ class Adam(Optimizer):
     #   Adam.b1 == 0
     #   Adam.b2 == RMSprop.mu
 
-    def __init__(self, alpha=0.002, b1=0.9, b2=0.999, eps=1e-8):
+    def __init__(self, lr=0.002, b1=0.9, b2=0.999, eps=1e-8):
         self.b1 = _f(b1) # decay term
         self.b2 = _f(b2) # decay term
         self.b1_t_default = _f(b1) # decay term power t
         self.b2_t_default = _f(b2) # decay term power t
         self.eps = _f(eps)
 
-        super().__init__(alpha)
+        super().__init__(lr)
 
     def reset(self):
         self.mt = None
@@ -350,8 +350,8 @@ class Adam(Optimizer):
         self.mt[:] = self.b1 * self.mt + (1 - self.b1) * dW
         self.vt[:] = self.b2 * self.vt + (1 - self.b2) * dW * dW
 
-        return -self.alpha * (self.mt / (1 - self.b1_t)) \
-                   / (np.sqrt(self.vt / (1 - self.b2_t)) + self.eps)
+        return -self.lr * (self.mt / (1 - self.b1_t)) \
+                / (np.sqrt(self.vt / (1 - self.b2_t)) + self.eps)
 
 class Nadam(Optimizer):
     # paper: https://arxiv.org/abs/1412.6980
@@ -360,12 +360,12 @@ class Nadam(Optimizer):
     # lifted from https://github.com/fchollet/keras/blob/5d38b04/keras/optimizers.py#L530
     # lifted from https://github.com/jpilaul/IFT6266_project/blob/master/Models/Algo_Momentum.py
 
-    def __init__(self, alpha=0.002, b1=0.9, b2=0.999, eps=1e-8):
+    def __init__(self, lr=0.002, b1=0.9, b2=0.999, eps=1e-8):
         self.b1 = _f(b1) # decay term
         self.b2 = _f(b2) # decay term
         self.eps = _f(eps)
 
-        super().__init__(alpha)
+        super().__init__(lr)
 
     def reset(self):
         self.mt = None
@@ -398,7 +398,7 @@ class Nadam(Optimizer):
 
         mt_bar = (1 - ut0) * gp + ut1 * mtp
 
-        return -self.alpha * mt_bar / (np.sqrt(vtp) + self.eps)
+        return -self.lr * mt_bar / (np.sqrt(vtp) + self.eps)
 
 # Abstract Layers {{{1
 
@@ -1071,7 +1071,7 @@ class Learner:
     def __init__(self, optim, epochs=100, rate=None):
         assert isinstance(optim, Optimizer)
         self.optim = optim
-        self.start_rate = rate # None is okay; it'll use optim.alpha instead.
+        self.start_rate = rate # None is okay; it'll use optim.lr instead.
         self.epochs = int(epochs)
         self.reset()
 
@@ -1093,15 +1093,15 @@ class Learner:
 
     @property
     def rate(self):
-        return self.optim.alpha
+        return self.optim.lr
 
     @rate.setter
     def rate(self, new_rate):
-        self.optim.alpha = new_rate
+        self.optim.lr = new_rate
 
     def rate_at(self, epoch):
         if self.start_rate is None:
-            return self.optim.alpha
+            return self.optim.lr
         return self.start_rate
 
     def next(self):

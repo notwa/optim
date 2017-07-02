@@ -108,13 +108,13 @@ class FTML(Optimizer):
     # paper: http://www.cse.ust.hk/~szhengac/papers/icml17.pdf
     # author's implementation: https://github.com/szhengac/optim/commit/923555e
 
-    def __init__(self, alpha=0.0025, b1=0.6, b2=0.999, eps=1e-8):
+    def __init__(self, lr=0.0025, b1=0.6, b2=0.999, eps=1e-8):
         self.iterations = _0
         self.b1 = _f(b1) # decay term
         self.b2 = _f(b2) # decay term
         self.eps = _f(eps)
 
-        super().__init__(alpha)
+        super().__init__(lr)
 
     def reset(self):
         self.dt1 = None
@@ -137,14 +137,14 @@ class FTML(Optimizer):
         self.b2_t *= self.b2
 
         # hardly an elegant solution.
-        alpha = max(self.alpha, self.eps)
+        lr = max(self.lr, self.eps)
 
         # same as Adam's vt.
         self.vt[:] = self.b2 * self.vt + (1 - self.b2) * dW * dW
 
         # you can factor out "inner" out of Adam as well.
         inner = np.sqrt(self.vt / (1 - self.b2_t)) + self.eps
-        self.dt[:] = (1 - self.b1_t) / alpha * inner
+        self.dt[:] = (1 - self.b1_t) / lr * inner
 
         sigma_t = self.dt - self.b1 * self.dt1
 
@@ -159,17 +159,17 @@ class YellowFin(Momentum):
     # knowyourmeme: http://cs.stanford.edu/~zjian/project/YellowFin/
     # author's implementation: https://github.com/JianGoForIt/YellowFin/blob/master/tuner_utils/yellowfin.py
 
-    def __init__(self, alpha=0.1, mu=0.0, beta=0.999, curv_win_width=20):
-        self.alpha_default = _f(alpha)
+    def __init__(self, lr=0.1, mu=0.0, beta=0.999, curv_win_width=20):
+        self.lr_default = _f(lr)
         self.mu_default = _f(mu)
         self.beta = _f(beta)
         self.curv_win_width = int(curv_win_width)
 
-        super().__init__(alpha=alpha, mu=mu, nesterov=False)
+        super().__init__(lr=lr, mu=mu, nesterov=False)
 
     def reset(self):
         super().reset()
-        self.alpha = self.alpha_default
+        self.lr = self.lr_default
         self.mu = self.mu_default
 
         self.step = 0
@@ -1077,7 +1077,7 @@ def run(program, args=None):
         # use plain SGD in warmup to prevent (or possibly cause?) numeric issues
         temp_optim = learner.optim
         temp_loss = ritual.loss
-        learner.optim = Optimizer(alpha=0.001)
+        learner.optim = Optimizer(lr=0.001)
         ritual.loss = Absolute() # less likely to blow up; more general
 
         # NOTE: experiment: trying const batches and batch_size

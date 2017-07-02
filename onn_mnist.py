@@ -217,7 +217,7 @@ while learner.next():
         quiet = learner.epoch != learner.epochs
         measure_error(quiet=quiet)
 
-    logs.learning_rate.append(optim.alpha)
+    logs.learning_rate.append(optim.lr)
     if getattr(optim, 'mu', None):
         logs.momentum.append(optim.mu)
 
