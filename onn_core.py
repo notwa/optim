@@ -314,9 +314,8 @@ class RMSprop(Optimizer):
 class Adam(Optimizer):
     # paper: https://arxiv.org/abs/1412.6980
     # Adam generalizes* RMSprop, and
-    # adds a decay term to the regular (non-squared) delta, and
-    # does some decay-gain voodoo. (i guess it's compensating
-    # for the filtered deltas starting from zero)
+    # adds a decay term to the regular (non-squared) delta, and performs
+    # debiasing to compensate for the filtered deltas starting from zero.
 
     # * Adam == RMSprop when
     #   Adam.b1 == 0
@@ -1072,7 +1071,7 @@ class Learner:
     def __init__(self, optim, epochs=100, rate=None):
         assert isinstance(optim, Optimizer)
         self.optim = optim
-        self.start_rate = optim.alpha if rate is None else _f(rate)
+        self.start_rate = rate # None is okay; it'll use optim.alpha instead.
         self.epochs = int(epochs)
         self.reset()
 
@@ -1101,6 +1100,8 @@ class Learner:
         self.optim.alpha = new_rate
 
     def rate_at(self, epoch):
+        if self.start_rate is None:
+            return self.optim.alpha
         return self.start_rate
 
     def next(self):

@@ -136,10 +136,12 @@ if learner_class == SGDR:
     learner = learner_class(optim, epochs=epochs//starts, rate=lr,
                             restarts=starts-1, restart_decay=restart_decay,
                             expando=lambda i:0)
-else:
-    assert learner_class in (TriangularCLR, SineCLR, WaveCLR)
+elif learner_class in (TriangularCLR, SineCLR, WaveCLR):
     learner = learner_class(optim, epochs=epochs, lower_rate=0, upper_rate=lr,
                             frequency=epochs//starts)
+else:
+    lament('NOTE: no learning rate schedule selected.')
+    learner = Learner(optim, epochs=epochs)
 
 loss = CategoricalCrossentropy()
 mloss = Accuracy()
