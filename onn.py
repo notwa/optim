@@ -154,6 +154,33 @@ class FTML(Optimizer):
         # subtract by weights to avoid having to override self.update.
         return -self.zt / self.dt - W
 
+class MomentumClip(Optimizer):
+    def __init__(self, lr=0.01, mu=0.9, nesterov=False, clip=1.0):
+        self.mu = _f(mu)
+        self.clip = _f(clip)
+        self.nesterov = bool(nesterov)
+
+        super().__init__(lr)
+
+    def reset(self):
+        self.accum = None
+
+    def compute(self, dW, W):
+        if self.accum is None:
+            self.accum = np.zeros_like(dW)
+
+        total_norm = np.linalg.norm(dW)
+        clip_scale = self.clip / (total_norm + 1e-6)
+        if clip_scale < 1:
+            print("clipping gradients; norm: {:10.7f}".format(total_norm))
+            dW *= clip_scale
+
+        self.accum[:] = self.accum * self.mu + dW
+        if self.nesterov:
+            return -self.lr * dW * self.lr + self.accum * self.mu
+        else:
+            return -self.lr * self.accum
+
 class YellowFin(Momentum):
     # paper: https://arxiv.org/abs/1706.03471
     # knowyourmeme: http://cs.stanford.edu/~zjian/project/YellowFin/
