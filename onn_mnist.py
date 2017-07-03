@@ -46,19 +46,19 @@ else:
     learner_class = None #SGDR
     restart_decay = 0.5
 
-    n_dense = 2
+    n_dense = 1
     n_denses = 0
     new_dims = (4, 12)
-    activation = Relu
+    activation = Relu # GeluApprox
 
-    reg = None # L1L2(3.2e-5, 3.2e-4)
-    final_reg = None # L1L2(3.2e-5, 1e-3)
+    reg       = None # L1L2(1e-6, 1e-5) # L1L2(3.2e-5, 3.2e-4)
+    final_reg = None # L1L2(1e-6, 1e-5) # L1L2(3.2e-5, 1e-3)
     dropout = None # 0.05
     actreg_lamb = None #1e-4
 
     load_fn = None
-    save_fn = 'mnist.h5'
-    log_fn = 'mnist_losses.npz'
+    save_fn = 'mnist3.h5'
+    log_fn = 'mnist_losses3.npz'
 
     fn = 'mnist.npz'
     mnist_dim = 28
@@ -132,7 +132,8 @@ model = Model(x, y, unsafe=True)
 
 lr *= np.sqrt(bs)
 
-optim = YellowFin()
+optim = YellowFin() #beta=np.exp(-1/240)
+#optim = MomentumClip(0.8, 0.8)
 if learner_class == SGDR:
     learner = learner_class(optim, epochs=epochs//starts, rate=lr,
                             restarts=starts-1, restart_decay=restart_decay,
