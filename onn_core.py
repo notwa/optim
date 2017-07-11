@@ -4,6 +4,24 @@ import types
 def lament(*args, **kwargs):
     print(*args, file=sys.stderr, **kwargs)
 
+def lower_priority():
+    """Set the priority of the process to below-normal."""
+    # via https://stackoverflow.com/a/1023269
+    if sys.platform == 'win32':
+        try:
+            import win32api, win32process, win32con
+            pid = win32api.GetCurrentProcessId()
+            handle = win32api.OpenProcess(win32con.PROCESS_ALL_ACCESS, True, pid)
+            win32process.SetPriorityClass(handle, win32process.BELOW_NORMAL_PRIORITY_CLASS)
+        except ImportError:
+            lament("you do not have pywin32 installed.")
+            lament("the process priority could not be lowered.")
+            lament("consider: python -m pip install pypiwin32")
+            lament("consider: conda install pywin32")
+    else:
+        import os
+        os.nice(1)
+
 import numpy as np
 _f = np.float32
 

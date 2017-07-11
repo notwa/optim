@@ -991,6 +991,7 @@ def model_from_config(config, input_features, output_features, callbacks):
 def run(program, args=None):
     args = args if args else []
 
+    lower_priority()
     np.random.seed(42069)
 
     # Config {{{2

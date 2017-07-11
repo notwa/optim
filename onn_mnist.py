@@ -4,6 +4,7 @@ from onn import *
 from onn_core import _f
 from dotmap import DotMap
 
+lower_priority()
 #np.random.seed(42069)
 
 use_emnist = True
