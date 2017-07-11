@@ -998,8 +998,13 @@ class Ritual: # i'm just making up names at this point.
                 self.bn += 1
 
             if gen:
-                # TODO: pass a GeneratorData object containing en, bn, ritual/model fields.
+                # TODO: pass self as an argument to the generator.
                 #       ...is there a pythonic way of doing that?
+                # as it turns out, there is! (untested code)
+                # in the generator: model = yield
+                #                   yield dostuff(model)
+                #          in here: generator.send()
+                #                   stuff = next(generator)
                 batch_inputs, batch_outputs = next(generator)
                 batch_size = batch_inputs.shape[0]
                 # TODO: lift this restriction
