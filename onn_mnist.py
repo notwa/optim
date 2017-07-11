@@ -6,12 +6,12 @@ from dotmap import DotMap
 
 #np.random.seed(42069)
 
-use_emnist = False
+use_emnist = True
 
 measure_every_epoch = True
 
 if use_emnist:
-    lr = 0.0005
+    lr = 0.005
     epochs = 48
     starts = 2
     bs = 400
@@ -24,9 +24,9 @@ if use_emnist:
     new_dims = (28, 28)
     activation = GeluApprox
 
-    reg = L1L2(3.2e-5, 3.2e-4)
-    final_reg = L1L2(3.2e-5, 1e-3)
-    dropout = 0.05
+    reg =       None # L1L2(2.0e-5, 1.0e-4)
+    final_reg = None # L1L2(2.0e-5, 1.0e-4)
+    dropout = 0.33
     actreg_lamb = None
 
     load_fn = None
@@ -57,8 +57,8 @@ else:
     actreg_lamb = None #1e-4
 
     load_fn = None
-    save_fn = 'mnist3.h5'
-    log_fn = 'mnist_losses3.npz'
+    save_fn = None # 'mnist.h5'
+    log_fn = 'mnist_losses6.npz'
 
     fn = 'mnist.npz'
     mnist_dim = 28
@@ -98,6 +98,7 @@ def regulate(y):
         act = ActivityRegularizer(reg)
         reg.lamb_orig = reg.lamb # HACK
         y = y.feed(act)
+    y = y.feed(LayerNorm())
     if dropout:
         y = y.feed(Dropout(dropout))
     return y
@@ -132,9 +133,7 @@ model = Model(x, y, unsafe=True)
 
 lr *= np.sqrt(bs)
 
-#optim = Adam()
-optim = YellowFin() #beta=np.exp(-1/240)
-#optim = MomentumClip(0.8, 0.8)
+optim = MomentumClip(0.8, 0.8)
 if learner_class == SGDR:
     learner = learner_class(optim, epochs=epochs//starts, rate=lr,
                             restarts=starts-1, restart_decay=restart_decay,
