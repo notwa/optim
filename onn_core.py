@@ -1025,7 +1025,7 @@ class Ritual: # i'm just making up names at this point.
             avg_loss = self.cumsum_loss / _f(batch_count)
             return avg_loss, avg_mloss, self.losses, self.mlosses
         elif return_losses:
-            return avg_mloss, mlosses
+            return avg_mloss, self.mlosses
         return avg_mloss
 
     def test_batched(self, inputs, outputs, *args, **kwargs):

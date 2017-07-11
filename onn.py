@@ -1014,11 +1014,10 @@ def run(program, args=None):
         #optim = 'ftml',
         #optim_decay1 = 2,
         #optim_decay2 = 100,
-        #nesterov = False,
         optim = 'adam', # note: most features only implemented for Adam
         optim_decay1 = 24,  #  first momentum given in epochs (optional)
         optim_decay2 = 100, # second momentum given in epochs (optional)
-        nesterov = True,
+        nesterov = True, # not available for all optimizers.
         batch_size = 64,
 
         # learning parameters
@@ -1092,7 +1091,7 @@ def run(program, args=None):
     def measure_error():
         def print_error(name, inputs, outputs, comparison=None):
             predicted = model.forward(inputs)
-            err = ritual.measure(predicted, outputs)
+            err = ritual.mloss.forward(predicted, outputs)
             if config.log10_loss:
                 print(name, "{:12.6e}".format(err))
                 if comparison:
