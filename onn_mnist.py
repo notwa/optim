@@ -132,6 +132,7 @@ model = Model(x, y, unsafe=True)
 
 lr *= np.sqrt(bs)
 
+#optim = Adam()
 optim = YellowFin() #beta=np.exp(-1/240)
 #optim = MomentumClip(0.8, 0.8)
 if learner_class == SGDR:

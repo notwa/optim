@@ -172,7 +172,7 @@ class MomentumClip(Optimizer):
         total_norm = np.linalg.norm(dW)
         clip_scale = self.clip / (total_norm + 1e-6)
         if clip_scale < 1:
-            print("clipping gradients; norm: {:10.7f}".format(total_norm))
+            #print("clipping gradients; norm: {:10.5f}".format(total_norm))
             dW *= clip_scale
 
         self.accum[:] = self.accum * self.mu + dW
@@ -181,6 +181,7 @@ class MomentumClip(Optimizer):
         else:
             return -self.lr * self.accum
 
+yfalt = True # use computations from https://gist.github.com/botev/f8b32c00eafee222e47393f7f0747666
 class YellowFin(Optimizer):
     # paper: https://arxiv.org/abs/1706.03471
     # knowyourmeme: http://cs.stanford.edu/~zjian/project/YellowFin/
@@ -222,28 +223,45 @@ class YellowFin(Optimizer):
         self.lr_lpf = 0
         self.mu_lpf = 0
 
-    def get_lr(self, mu_for_real):
-        return np.square(1 - np.sqrt(mu_for_real)) / self.h_min # lr_min
-        #      np.square(1 + np.sqrt(mu_for_real)) / self.h_max # lr_max
+    def get_lr_mu(self):
+        if yfalt:
+            p = (np.square(self.dist_avg) * np.square(self.h_min)) / (2 * self.g_var)
+            w3 = p * (np.sqrt(0.25 + p / 27.0) - 0.5)
+            w = np.power(w3, 1/3)
+            y = w - p / (3 * w)
+            sqrt_mu1 = y + 1
 
-    def get_mu(self):
-        const_fact = np.square(self.dist_avg) * np.square(self.h_min) / 2 / self.g_var
-        assert const_fact > -1e-7, "invalid factor"
-        coef = [-1.0, 3.0, -(3.0 + const_fact), 1.0]
-        roots = np.roots(coef) # note: returns a list of np.complex64.
+            sqrt_h_min = np.sqrt(self.h_min)
+            sqrt_h_max = np.sqrt(self.h_max)
+            sqrt_mu2 = (sqrt_h_max - sqrt_h_min) / (sqrt_h_max + sqrt_h_min)
 
-        roots = roots[np.logical_and(np.real(roots) > 0, np.real(roots) < 1)]
-        root = roots[np.argmin(np.imag(roots))]
-        assert np.absolute(root.imag) < 1e-5
-        real_root = np.real(root)
+            sqrt_mu = max(sqrt_mu1, sqrt_mu2)
+            if sqrt_mu2 > sqrt_mu1:
+                print('note: taking dr calculation. something may have exploded.')
 
-        dr_sqrt = np.sqrt(self.h_max / self.h_min)
-        assert self.h_max >= self.h_min
-        a, b = np.square((dr_sqrt - 1) / (dr_sqrt + 1)), np.square(real_root)
-        mu = max(a, b)
-        if a > b:
-            print('note: taking dr calculation. something may have exploded.')
-        return mu
+            lr = np.square(1 - sqrt_mu) / self.h_min
+            mu = np.square(sqrt_mu)
+            return lr, mu
+
+        else:
+            const_fact = np.square(self.dist_avg) * np.square(self.h_min) / 2 / self.g_var
+            assert const_fact > -1e-7, "invalid factor"
+            coef = [-1.0, 3.0, -(3.0 + const_fact), 1.0]
+            roots = np.roots(coef) # note: returns a list of np.complex64.
+
+            roots = roots[np.logical_and(np.real(roots) > 0, np.real(roots) < 1)]
+            root = roots[np.argmin(np.imag(roots))]
+            assert np.absolute(root.imag) < 1e-5
+            real_root = np.real(root)
+
+            dr_sqrt = np.sqrt(self.h_max / self.h_min)
+            a, b = np.square((dr_sqrt - 1) / (dr_sqrt + 1)), np.square(real_root)
+            mu = max(a, b)
+            if a > b:
+                print('note: taking dr calculation. something may have exploded.')
+            lr_min = np.square(1 - np.sqrt(mu)) / self.h_min
+            #lr_max = np.square(1 + np.sqrt(mu)) / self.h_max
+            return lr_min, mu
 
     def compute(self, dW, W):
         if self.accum is None:
@@ -255,11 +273,12 @@ class YellowFin(Optimizer):
         total_norm = np.linalg.norm(dW)
         clip_scale = self.clip / (total_norm + 1e-6)
         if clip_scale < 1:
-            #print("clipping gradients; norm: {:10.7f}".format(total_norm))
+            #print("clipping gradients; norm: {:10.5f}".format(total_norm))
             dW *= clip_scale
 
-        self.accum[:] = self.accum * self.mu + dW
-        V = -self.lr * self.accum
+        if not yfalt:
+            self.accum[:] = self.accum * self.mu + dW
+            V = -self.lr * self.accum
 
         #fmt = 'W std: {:10.7f}e-3,  dWstd: {:10.7f}e-3,  V std: {:10.7f}e-3'
         #print(fmt.format(np.std(W), np.std(dW) * 100, np.std(V) * 100))
@@ -291,6 +310,7 @@ class YellowFin(Optimizer):
         g_norm_avg         = debias * self.g_norm_lpf
         self.h_min         = debias * self.h_min_lpf
         self.h_max         = debias * self.h_max_lpf
+        assert self.h_max >= self.h_min
 
         dist = g_norm_avg / g_norm_squared_avg
 
@@ -299,16 +319,19 @@ class YellowFin(Optimizer):
         self.dist_avg      = debias * self.dist_lpf
 
         self.g_var = g_norm_squared_avg - np.sum(np.square(g_avg))
-        # alternatively:
+        # equivalently:
         #self.g_var = np.sum(np.abs(g_squared_avg - np.square(g_avg)))
 
         if self.step > 0:
-            mu_for_real = self.get_mu()
-            lr_for_real = self.get_lr(mu_for_real)
+            lr_for_real, mu_for_real = self.get_lr_mu()
             self.mu_lpf = b * self.mu_lpf + m1b * mu_for_real
             self.lr_lpf = b * self.lr_lpf + m1b * lr_for_real
             self.mu = debias * self.mu_lpf
             self.lr = debias * self.lr_lpf
+
+        if yfalt:
+            self.accum[:] = self.accum * self.mu - self.lr * dW
+            V = self.accum
 
         self.step += 1
         self.beta_t *= self.beta
