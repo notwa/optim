@@ -6,12 +6,6 @@ i give no guarantee anything provided here is correct.
 
 don't expect commits, docs, or comments to be any verbose.
 
-### heads up
-
-this was formerly a gist.
-**i might rewrite the git history**
-at some point to add meaningful commit messages.
-
 ## other stuff
 
 if you're coming here from Google: sorry, keep searching.
