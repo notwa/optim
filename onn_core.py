@@ -302,7 +302,7 @@ class RMSprop(Optimizer):
     # * RMSprop == Adagrad when
     #   RMSprop.mu == 1
 
-    def __init__(self, lr=0.0001, mu=0.99, eps=1e-8):
+    def __init__(self, lr=1e-4, mu=0.99, eps=1e-8):
         self.mu = _f(mu) # decay term
         self.eps = _f(eps)
 
@@ -367,7 +367,7 @@ class Adam(Optimizer):
 
         # filter
         self.mt[:] = self.b1 * self.mt + (1 - self.b1) * dW
-        self.vt[:] = self.b2 * self.vt + (1 - self.b2) * dW * dW
+        self.vt[:] = self.b2 * self.vt + (1 - self.b2) * np.square(dW)
 
         return -self.lr * (self.mt / (1 - self.b1_t)) \
                 / (np.sqrt(self.vt / (1 - self.b2_t)) + self.eps)
@@ -887,7 +887,6 @@ class Model:
 
         for k, v in used.items():
             if not v:
-                # FIXME: lament undeclared without optim_nn.py!
                 lament("WARNING: unused weight", k)
 
     def save_weights(self, fn, overwrite=False):
@@ -907,7 +906,6 @@ class Model:
                 data[:] = target.f
                 counts[key] += 1
                 if counts[key] > 1:
-                    # FIXME: lament undeclared without optim_nn.py!
                     lament("WARNING: rewrote weight", key)
 
         f.close()
