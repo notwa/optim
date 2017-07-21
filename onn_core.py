@@ -323,12 +323,55 @@ class RMSprop(Optimizer):
             self.g = np.zeros_like(dW)
 
         # basically apply a first-order low-pass filter to delta squared
-        self.g[:] = self.mu * self.g + (1 - self.mu) * dW * dW
+        self.g[:] = self.mu * self.g + (1 - self.mu) * np.square(dW)
         # equivalent (though numerically different?):
-        #self.g += (dW * dW - self.g) * (1 - self.mu)
+        #self.g += (np.square(dW) - self.g) * (1 - self.mu)
 
         # finally sqrt it to complete the running root-mean-square approximation
         return -self.lr * dW / (np.sqrt(self.g) + self.eps)
+
+class RMSpropCentered(Optimizer):
+    # referenced TensorFlow/PyTorch.
+    # paper: https://arxiv.org/pdf/1308.0850v5.pdf
+
+    def __init__(self, lr=1e-4, aleph=0.95, momentum=0.9, eps=1e-8):
+        self.aleph = _f(aleph)
+        self.momentum = _f(momentum)
+        self.eps = _f(eps)
+
+        super().__init__(lr)
+
+    def reset(self):
+        self.g = None
+        self.mt = None
+        self.vt = None
+        self.delta = None
+
+    def compute(self, dW, W):
+        if self.g is None:
+            self.g = np.zeros_like(dW)
+        if self.mt is None:
+            self.mt = np.zeros_like(dW)
+        if self.vt is None:
+            self.vt = np.zeros_like(dW)
+        if self.delta is None:
+            self.delta = np.zeros_like(dW)
+
+        self.mt[:] = self.aleph * self.mt + (1 - self.aleph) * dW
+        self.vt[:] = self.aleph * self.vt + (1 - self.aleph) * np.square(dW)
+
+        # PyTorch has the epsilon outside of the sqrt,
+        # TensorFlow and the paper have it within.
+        # in onn, we generally do it outside, as this seems to work better.
+        temp = dW / (np.sqrt(self.vt - np.square(self.mt)) + self.eps)
+
+        # TensorFlow does it this way.
+        self.delta[:] = self.momentum * self.delta + self.lr * temp
+        return -self.delta
+        # PyTorch does it this way.
+        #self.delta[:] = self.momentum * self.delta + temp
+        #return -self.lr * self.delta
+        # they are equivalent only when LR is constant, which it might not be.
 
 class Adam(Optimizer):
     # paper: https://arxiv.org/abs/1412.6980
