@@ -967,7 +967,7 @@ def ritual_from_config(config, learner, loss, mloss):
 
     return ritual
 
-def model_from_config(config, input_features, output_features, callbacks):
+def model_from_config(config, input_features, output_features, callbacks=None):
     init = inits[config.init]
     activation = activations[config.activation]
 
@@ -990,7 +990,8 @@ def model_from_config(config, input_features, output_features, callbacks):
     optim = optim_from_config(config)
 
     def rscb(restart):
-        callbacks.restart()
+        if callbacks:
+            callbacks.restart()
         log("restarting", restart)
         if config.restart_optim:
             optim.reset()
