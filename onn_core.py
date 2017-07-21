@@ -323,9 +323,7 @@ class RMSprop(Optimizer):
             self.g = np.zeros_like(dW)
 
         # basically apply a first-order low-pass filter to delta squared
-        self.g[:] = self.mu * self.g + (1 - self.mu) * np.square(dW)
-        # equivalent (though numerically different?):
-        #self.g += (np.square(dW) - self.g) * (1 - self.mu)
+        self.g += (1 - self.mu) * (np.square(dW) - self.g)
 
         # finally sqrt it to complete the running root-mean-square approximation
         return -self.lr * dW / (np.sqrt(self.g) + self.eps)
@@ -357,8 +355,8 @@ class RMSpropCentered(Optimizer):
         if self.delta is None:
             self.delta = np.zeros_like(dW)
 
-        self.mt[:] = self.aleph * self.mt + (1 - self.aleph) * dW
-        self.vt[:] = self.aleph * self.vt + (1 - self.aleph) * np.square(dW)
+        self.mt += (1 - self.aleph) * (dW - self.mt)
+        self.vt += (1 - self.aleph) * (np.square(dW) - self.vt)
 
         # PyTorch has the epsilon outside of the sqrt,
         # TensorFlow and the paper have it within.
@@ -409,8 +407,8 @@ class Adam(Optimizer):
         self.b2_t *= self.b2
 
         # filter
-        self.mt[:] = self.b1 * self.mt + (1 - self.b1) * dW
-        self.vt[:] = self.b2 * self.vt + (1 - self.b2) * np.square(dW)
+        self.mt += (1 - self.b1) * (dW - self.mt)
+        self.vt += (1 - self.b2) * (np.square(dW) - self.vt)
 
         return -self.lr * (self.mt / (1 - self.b1_t)) \
                 / (np.sqrt(self.vt / (1 - self.b2_t)) + self.eps)
@@ -452,8 +450,8 @@ class Nadam(Optimizer):
 
         gp = dW / (1 - sched0)
 
-        self.mt[:] = self.b1 * self.mt + (1 - self.b1) * dW
-        self.vt[:] = self.b2 * self.vt + (1 - self.b2) * np.square(dW)
+        self.mt += (1 - self.b1) * (dW - self.mt)
+        self.vt += (1 - self.b2) * (np.square(dW) - self.vt)
 
         mtp = self.mt / (1 - sched1)
         vtp = self.vt / (1 - self.b2**self.t)
