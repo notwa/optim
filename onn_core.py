@@ -698,7 +698,7 @@ class Softplus(Layer):
         return np.log(1 + np.exp(X))
 
     def backward(self, dY):
-        return sigmoid(self.X)
+        return dY * sigmoid(self.X)
 
 class Tanh(Layer):
     def forward(self, X):
