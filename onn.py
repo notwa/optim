@@ -177,7 +177,7 @@ class MomentumClip(Optimizer):
 
         self.accum[:] = self.accum * self.mu + dW
         if self.nesterov:
-            return -self.lr * dW * self.lr + self.accum * self.mu
+            return -self.lr * (self.accum * self.mu + dW)
         else:
             return -self.lr * self.accum
 
