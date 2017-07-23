@@ -403,6 +403,41 @@ class TanhTest(Layer):
     def backward(self, dY):
         return dY * (1 / 2 * 2.4004) * (1 - self.sig * self.sig)
 
+class ExpGB(Layer):
+    # an output layer for one-hot classification problems.
+    # use with MSE (SquaredHalved), not CategoricalCrossentropy!
+    # paper: https://arxiv.org/abs/1707.04199
+
+    def __init__(self, alpha=0.1, beta=0.0):
+        super().__init__()
+        self.alpha = _f(alpha)
+        self.beta = _f(beta)
+
+    def forward(self, X):
+        return self.alpha * np.exp(X) + self.beta
+
+    def backward(self, dY):
+        # this gradient is intentionally incorrect.
+        return dY
+
+class CubicGB(Layer):
+    # an output layer for one-hot classification problems.
+    # use with MSE (SquaredHalved), not CategoricalCrossentropy!
+    # paper: https://arxiv.org/abs/1707.04199
+    # note: in the paper, it's called pow3GB, which is ugly.
+
+    def __init__(self, alpha=0.001, beta=0.4):
+        super().__init__()
+        self.alpha = _f(alpha)
+        self.beta = _f(beta)
+
+    def forward(self, X):
+        return self.alpha * X**3 + self.beta
+
+    def backward(self, dY):
+        # this gradient is intentionally incorrect.
+        return dY
+
 # Parametric Layers {{{1
 
 class LayerNorm(Layer):
