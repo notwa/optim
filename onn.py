@@ -155,10 +155,11 @@ class FTML(Optimizer):
         return -self.zt / self.dt - W
 
 class MomentumClip(Optimizer):
-    def __init__(self, lr=0.01, mu=0.9, nesterov=False, clip=1.0):
+    def __init__(self, lr=0.01, mu=0.9, nesterov=False, clip=1.0, debug=False):
         self.mu = _f(mu)
         self.clip = _f(clip)
         self.nesterov = bool(nesterov)
+        self.debug = bool(debug)
 
         super().__init__(lr)
 
@@ -172,7 +173,8 @@ class MomentumClip(Optimizer):
         total_norm = np.linalg.norm(dW)
         clip_scale = self.clip / (total_norm + 1e-6)
         if clip_scale < 1:
-            #print("clipping gradients; norm: {:10.5f}".format(total_norm))
+            if self.debug:
+                lament("clipping gradients; norm: {:10.5f}".format(total_norm))
             dW *= clip_scale
 
         self.accum[:] = self.accum * self.mu + dW
