@@ -215,6 +215,13 @@ class ResidualLoss(Loss):
         ret = self.df(p - y) / len(y)
         return ret
 
+class SquaredHalved(ResidualLoss):
+    def f(self, r):
+        return np.square(r) / 2
+
+    def df(self, r):
+        return r
+
 class Squared(ResidualLoss):
     def f(self, r):
         return np.square(r)

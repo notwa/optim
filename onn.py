@@ -32,13 +32,6 @@ def init_gaussian_unit(size, ins, outs):
 
 # Loss functions {{{1
 
-class SquaredHalved(ResidualLoss):
-    def f(self, r):
-        return np.square(r) / 2
-
-    def df(self, r):
-        return r
-
 class SomethingElse(ResidualLoss):
     # generalizes Absolute and SquaredHalved.
     # plot: https://www.desmos.com/calculator/fagjg9vuz7
