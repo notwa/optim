@@ -680,7 +680,7 @@ class Dropout(Layer):
 
 # Activation Layers {{{2
 
-class Linear(Layer):
+class Identity(Layer):
     def forward(self, X):
         return X
 
