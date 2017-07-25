@@ -680,6 +680,13 @@ class Dropout(Layer):
 
 # Activation Layers {{{2
 
+class Linear(Layer):
+    def forward(self, X):
+        return X
+
+    def backward(self, dY):
+        return dY
+
 class Sigmoid(Layer): # aka Logistic, Expit (inverse of Logit)
     def forward(self, X):
         self.sig = sigmoid(X)
