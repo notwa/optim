@@ -497,15 +497,27 @@ class Conv1Dper(Layer):
         'b': 'biases',
     }
 
-    def __init__(self, kernel_size, bias=True,
+    def __init__(self, kernel_size, bias=True, pos=None,
                  init=init_glorot_uniform, reg_w=None, reg_b=None):
         super().__init__()
         self.kernel_size = int(kernel_size)
         self.bias = bool(bias)
         self.coeffs = self._new_weights('coeffs', init=init, regularizer=reg_w)
         self.biases = self._new_weights('biases', init=init_zeros, regularizer=reg_b)
-        self.wrap0 = (self.kernel_size - 0) // 2
-        self.wrap1 = (self.kernel_size - 1) // 2
+        if pos is None:
+            self.wrap0 = (self.kernel_size - 0) // 2
+            self.wrap1 = (self.kernel_size - 1) // 2
+        elif pos == 'alt':
+            self.wrap0 = (self.kernel_size - 1) // 2
+            self.wrap1 = (self.kernel_size - 0) // 2
+        elif pos == 'left':
+            self.wrap0 = 0
+            self.wrap1 = self.kernel_size - 1
+        elif pos == 'right':
+            self.wrap0 = self.kernel_size - 1
+            self.wrap1 = 0
+        else:
+            raise Exception("pos parameter not understood: {}".format(pos))
 
     def make_shape(self, parent):
         shape = parent.output_shape
@@ -516,7 +528,12 @@ class Conv1Dper(Layer):
         self.biases.shape = (1, shape[0])
 
     def forward(self, X):
-        Xper = np.hstack((X[:,-self.wrap0:],X,X[:,:self.wrap1]))
+        if self.wrap0 == 0:
+            Xper = np.hstack((X,X[:,:self.wrap1]))
+        elif self.wrap1 == 0:
+            Xper = np.hstack((X[:,-self.wrap0:],X))
+        else:
+            Xper = np.hstack((X[:,-self.wrap0:],X,X[:,:self.wrap1]))
         self.cols = rolling_batch(Xper, self.kernel_size)
         convolved = (self.cols * self.coeffs.f[:,::-1]).sum(2)
         if self.bias:
