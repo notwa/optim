@@ -482,6 +482,7 @@ class Layer:
         _layer_counters[kind] += 1
         self.name = "{}_{}".format(kind, _layer_counters[kind])
         self.unsafe = False # disables assertions for better performance
+        # TODO: allow weights to be shared across layers.
 
     def __str__(self):
         return self.name
@@ -851,6 +852,7 @@ class Model:
         self.make_weights()
         for node in self.nodes:
             node.unsafe = unsafe
+        # TODO: handle the same layer being in more than one node.
 
     @property
     def ordered_nodes(self):
@@ -978,6 +980,7 @@ class Model:
 
 class Ritual: # i'm just making up names at this point.
     def __init__(self, learner=None, loss=None, mloss=None):
+        # TODO: store loss and mloss in Model instead of here.
         self.learner = learner if learner is not None else Learner(Optimizer())
         self.loss = loss if loss is not None else Squared()
         self.mloss = mloss if mloss is not None else loss
@@ -1069,13 +1072,6 @@ class Ritual: # i'm just making up names at this point.
                 self.bn += 1
 
             if gen:
-                # TODO: pass self as an argument to the generator.
-                #       ...is there a pythonic way of doing that?
-                # as it turns out, there is! (untested code)
-                # in the generator: model = yield
-                #                   yield dostuff(model)
-                #          in here: generator.send()
-                #                   stuff = next(generator)
                 batch_inputs, batch_outputs = next(generator)
                 batch_size = batch_inputs.shape[0]
                 # TODO: lift this restriction
@@ -1087,7 +1083,7 @@ class Ritual: # i'm just making up names at this point.
                 batch_outputs = outputs[bi:bi+batch_size]
 
             self._train_batch(batch_inputs, batch_outputs, b, batch_count,
-                              test_only, return_losses == 'both', return_losses)
+                              test_only, return_losses=='both', return_losses)
 
             prev_batch_size = batch_size
 
