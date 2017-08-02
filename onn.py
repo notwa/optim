@@ -652,24 +652,6 @@ class Denses(Layer): # TODO: rename?
             self.coeffs.g += np.einsum('ijx,ijk->jxk', self.X, dY)
             return np.einsum('ijk,jxk->ijx', dY, self.coeffs.f)
 
-class DenseOneLess(Dense):
-    def init(self, allocator):
-        super().init(allocator)
-        ins, outs = self.input_shape[0], self.output_shape[0]
-        assert ins == outs, (ins, outs)
-
-    def forward(self, X):
-        np.fill_diagonal(self.coeffs.f, 0)
-        self.X = X
-        return X.dot(self.coeffs.f) + self.biases
-
-    def backward(self, dY):
-        self.coeffs.g += self.X.T.dot(dY)
-        self.biases.g += dY.sum(0, keepdims=True)
-        # FIXME: might not be desireable if weights are being shared.
-        np.fill_diagonal(self.coeffs.g, 0)
-        return dY.dot(self.coeffs.f.T)
-
 class CosineDense(Dense):
     # paper: https://arxiv.org/abs/1702.05870
     # another implementation: https://github.com/farizrahman4u/keras-contrib/pull/36
