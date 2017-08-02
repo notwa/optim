@@ -494,16 +494,13 @@ class Conv1Dper(Layer):
 
     serialize = {
         'W': 'coeffs',
-        'b': 'biases',
     }
 
-    def __init__(self, kernel_size, bias=True, pos=None,
-                 init=init_glorot_uniform, reg_w=None, reg_b=None):
+    def __init__(self, kernel_size, pos=None,
+                 init=init_glorot_uniform, reg_w=None):
         super().__init__()
         self.kernel_size = int(kernel_size)
-        self.bias = bool(bias)
         self.coeffs = self._new_weights('coeffs', init=init, regularizer=reg_w)
-        self.biases = self._new_weights('biases', init=init_zeros, regularizer=reg_b)
         if pos is None:
             self.wrap0 = (self.kernel_size - 0) // 2
             self.wrap1 = (self.kernel_size - 1) // 2
@@ -525,7 +522,6 @@ class Conv1Dper(Layer):
         assert len(shape) == 1, shape
         self.output_shape = shape
         self.coeffs.shape = (1, self.kernel_size)
-        self.biases.shape = (1, shape[0])
 
     def forward(self, X):
         if self.wrap0 == 0:
@@ -536,14 +532,10 @@ class Conv1Dper(Layer):
             Xper = np.hstack((X[:,-self.wrap0:],X,X[:,:self.wrap1]))
         self.cols = rolling_batch(Xper, self.kernel_size)
         convolved = (self.cols * self.coeffs.f[:,::-1]).sum(2)
-        if self.bias:
-            convolved += self.biases.f
         return convolved
 
     def backward(self, dY):
         self.coeffs.g += (dY[:,:,None] * self.cols).sum(0)[:,::-1].sum(0, keepdims=True)
-        if self.bias:
-            self.biases.g += dY.sum(0, keepdims=True)
         return (dY[:,:,None] * self.coeffs.f[:,::-1]).sum(2)
 
 class LayerNorm(Layer):
