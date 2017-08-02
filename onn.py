@@ -391,7 +391,7 @@ class Decimate(Layer):
         return dX
 
 class Undecimate(Layer):
-    # reverse operation of Decimate. not quite interpolation.
+    # inverse operation of Decimate. not quite interpolation.
 
     def __init__(self, phase='even'):
         super().__init__()
