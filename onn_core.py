@@ -825,6 +825,30 @@ class Cos(Layer):
 
 # Parametric Layers {{{1
 
+class Bias(Layer):
+    # TODO: support axes other than -1 and shapes other than 1D.
+
+    serialized = {
+        'b': 'biases',
+    }
+
+    def __init__(self, init=init_zeros, reg_b=None):
+        super().__init__()
+        self.biases = self._new_weights('biases', init=init, regularizer=reg_b)
+
+    def make_shape(self, parent):
+        shape = parent.output_shape
+        self.input_shape = shape
+        self.output_shape = shape
+        self.biases.shape = (self.dim,)
+
+    def forward(self, X):
+        return X + self.biases.f
+
+    def backward(self, dY):
+        self.biases.g += dY.sum(0)
+        return dY
+
 class Dense(Layer):
     serialized = {
         'W': 'coeffs',
