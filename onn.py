@@ -24,6 +24,20 @@ def log(left, right, update=False):
 class Dummy:
     pass
 
+# Math Utilities {{{1
+
+def rolling(a, window):
+    # http://stackoverflow.com/a/4924433
+    shape = (a.size - window + 1, window)
+    strides = (a.itemsize, a.itemsize)
+    return np.lib.stride_tricks.as_strided(a, shape=shape, strides=strides)
+
+def rolling_batch(a, window):
+    # same as rolling, but acts on each batch (axis 0).
+    shape = (a.shape[0], a.shape[-1] - window + 1, window)
+    strides = (np.prod(a.shape[1:]) * a.itemsize, a.itemsize, a.itemsize)
+    return np.lib.stride_tricks.as_strided(a, shape=shape, strides=strides)
+
 # Initializations {{{1
 
 def init_gaussian_unit(size, ins, outs):
@@ -406,6 +420,51 @@ class CubicGB(Layer):
         return dY
 
 # Parametric Layers {{{1
+
+class Conv1Dper(Layer):
+    # periodic (circular) convolution.
+    # currently only supports one channel I/O.
+    # some notes:
+    # we could use FFTs for larger convolutions.
+    # i think storing the coefficients backwards would
+    # eliminate reversal in the critical code.
+
+    serialize = {
+        'W': 'coeffs',
+        'b': 'biases',
+    }
+
+    def __init__(self, kernel_size, bias=True,
+                 init=init_glorot_uniform, reg_w=None, reg_b=None):
+        super().__init__()
+        self.kernel_size = int(kernel_size)
+        self.bias = bool(bias)
+        self.coeffs = self._new_weights('coeffs', init=init, regularizer=reg_w)
+        self.biases = self._new_weights('biases', init=init_zeros, regularizer=reg_b)
+        self.wrap0 = (self.kernel_size - 0) // 2
+        self.wrap1 = (self.kernel_size - 1) // 2
+
+    def make_shape(self, parent):
+        shape = parent.output_shape
+        self.input_shape = shape
+        assert len(shape) == 1, shape
+        self.output_shape = shape
+        self.coeffs.shape = (1, self.kernel_size)
+        self.biases.shape = (1, shape[0])
+
+    def forward(self, X):
+        Xper = np.hstack((X[:,-self.wrap0:],X,X[:,:self.wrap1]))
+        self.cols = rolling_batch(Xper, self.kernel_size)
+        convolved = (self.cols * self.coeffs.f[:,::-1]).sum(2)
+        if self.bias:
+            convolved += self.biases.f
+        return convolved
+
+    def backward(self, dY):
+        self.coeffs.g[:] = (dY[:,:,None] * self.cols).sum(0)[:,::-1].sum(0, keepdims=True)
+        if self.bias:
+            self.biases.g[:] = dY.sum(0, keepdims=True)
+        return (dY[:,:,None] * self.coeffs.f[:,::-1]).sum(2)
 
 class LayerNorm(Layer):
     # paper: https://arxiv.org/abs/1607.06450
