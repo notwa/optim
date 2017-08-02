@@ -541,9 +541,9 @@ class Conv1Dper(Layer):
         return convolved
 
     def backward(self, dY):
-        self.coeffs.g[:] = (dY[:,:,None] * self.cols).sum(0)[:,::-1].sum(0, keepdims=True)
+        self.coeffs.g += (dY[:,:,None] * self.cols).sum(0)[:,::-1].sum(0, keepdims=True)
         if self.bias:
-            self.biases.g[:] = dY.sum(0, keepdims=True)
+            self.biases.g += dY.sum(0, keepdims=True)
         return (dY[:,:,None] * self.coeffs.f[:,::-1]).sum(2)
 
 class LayerNorm(Layer):
@@ -588,8 +588,8 @@ class LayerNorm(Layer):
 
         if self.affine:
             dXnorm = dY * self.gamma.f
-            self.gamma.g[:] = (dY * self.Xnorm).sum(0)
-            self.beta.g[:] = dY.sum(0)
+            self.gamma.g += (dY * self.Xnorm).sum(0)
+            self.beta.g += dY.sum(0)
         else:
             dXnorm = dY
 
@@ -644,12 +644,12 @@ class Denses(Layer): # TODO: rename?
             return np.einsum('ijx,jxk->ijk', X, self.coeffs.f) + self.biases.f
 
     def backward(self, dY):
-        self.biases.g[:] = dY.sum(0, keepdims=True)
+        self.biases.g += dY.sum(0, keepdims=True)
         if self.axis == 0:
-            self.coeffs.g[:] = np.einsum('ixj,ikj->xjk', self.X, dY)
+            self.coeffs.g += np.einsum('ixj,ikj->xjk', self.X, dY)
             return np.einsum('ikj,xjk->ixj', dY, self.coeffs.f)
         elif self.axis == 1:
-            self.coeffs.g[:] = np.einsum('ijx,ijk->jxk', self.X, dY)
+            self.coeffs.g += np.einsum('ijx,ijk->jxk', self.X, dY)
             return np.einsum('ijk,jxk->ijx', dY, self.coeffs.f)
 
 class DenseOneLess(Dense):
@@ -664,8 +664,9 @@ class DenseOneLess(Dense):
         return X.dot(self.coeffs.f) + self.biases
 
     def backward(self, dY):
-        self.coeffs.g[:] = self.X.T.dot(dY)
-        self.biases.g[:] = dY.sum(0, keepdims=True)
+        self.coeffs.g += self.X.T.dot(dY)
+        self.biases.g += dY.sum(0, keepdims=True)
+        # FIXME: might not be desireable if weights are being shared.
         np.fill_diagonal(self.coeffs.g, 0)
         return dY.dot(self.coeffs.f.T)
 
@@ -693,9 +694,9 @@ class CosineDense(Dense):
         dX_norm = -(dY * self.dot / self.W_norm).sum(-1, keepdims=True) / self.X_norm**2
         dW_norm = -(dY * self.dot / self.X_norm).sum( 0, keepdims=True) / self.W_norm**2
 
-        self.coeffs.g[:] = self.X.T.dot(ddot)         \
+        self.coeffs.g += self.X.T.dot(ddot)         \
           + dW_norm / self.W_norm * self.coeffs.f
-        self.biases.g[:] = ddot.sum(0, keepdims=True) \
+        self.biases.g += ddot.sum(0, keepdims=True) \
           + dW_norm / self.W_norm * self.biases.f
         dX = ddot.dot(self.coeffs.f.T) + dX_norm / self.X_norm * self.X
 

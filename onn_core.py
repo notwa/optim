@@ -551,6 +551,10 @@ class Layer:
         self.weights[name] = w
         return w
 
+    def clear_grad(self):
+        for name, w in self.weights.items():
+            w.g[:] = 0
+
     @property
     def size(self):
         return sum((w.size for w in self.weights.values()))
@@ -834,8 +838,8 @@ class Dense(Layer):
         return X.dot(self.coeffs.f) + self.biases.f
 
     def backward(self, dY):
-        self.coeffs.g[:] = self.X.T.dot(dY)
-        self.biases.g[:] = dY.sum(0, keepdims=True)
+        self.coeffs.g += self.X.T.dot(dY)
+        self.biases.g += dY.sum(0, keepdims=True)
         return dY.dot(self.coeffs.f.T)
 
 # Models {{{1
@@ -901,6 +905,10 @@ class Model:
         for node in reversed(self.nodes[:-1]):
             values[node] = node.backpropagate(values)
         return self.dW
+
+    def clear_grad(self):
+        for node in self.nodes:
+            node.clear_grad()
 
     def regulate_forward(self):
         loss = _0
@@ -1034,7 +1042,8 @@ class Ritual: # i'm just making up names at this point.
 
     def train_batched(self, inputs_or_generator, outputs_or_batch_count,
                       batch_size=None,
-                      return_losses=False, test_only=False, shuffle=True):
+                      return_losses=False, test_only=False, shuffle=True,
+                      clear_grad=True):
         assert isinstance(return_losses, bool) or return_losses == 'both'
 
         gen = isinstance(inputs_or_generator, types.GeneratorType)
@@ -1082,6 +1091,8 @@ class Ritual: # i'm just making up names at this point.
                 batch_inputs  = inputs[ bi:bi+batch_size]
                 batch_outputs = outputs[bi:bi+batch_size]
 
+            if clear_grad:
+                self.model.clear_grad()
             self._train_batch(batch_inputs, batch_outputs, b, batch_count,
                               test_only, return_losses=='both', return_losses)
 
