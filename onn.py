@@ -470,7 +470,9 @@ class CubicGB(Layer):
     # paper: https://arxiv.org/abs/1707.04199
     # note: in the paper, it's called pow3GB, which is ugly.
 
-    def __init__(self, alpha=0.001, beta=0.4):
+    def __init__(self, alpha=0.1, beta=0.0):
+        # note: the paper suggests defaults of 0.001 and 0.0,
+        # but these didn't seem to work as well in my limited testing.
         super().__init__()
         self.alpha = _f(alpha)
         self.beta = _f(beta)
