@@ -1153,8 +1153,8 @@ def run(program, args=None):
         #optim_decay1 = 2,
         #optim_decay2 = 100,
         optim = 'adam', # note: most features only implemented for Adam
-        optim_decay1 = 24,  #  first momentum given in epochs (optional)
-        optim_decay2 = 100, # second momentum given in epochs (optional)
+        optim_decay1 = 24,  #  first momentum given in batches (optional)
+        optim_decay2 = 100, # second momentum given in batches (optional)
         nesterov = True, # not available for all optimizers.
         batch_size = 64,
 

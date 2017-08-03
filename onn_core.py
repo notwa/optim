@@ -322,7 +322,7 @@ class RMSprop(Optimizer):
         # mu = e**(-1/t)
         # default: t = -1/ln(0.99) = ~99.5
         # therefore the default of mu=0.99 means
-        # an input decays to 1/e its original amplitude over 99.5 epochs.
+        # an input decays to 1/e its original amplitude over 99.5 batches.
         # (this is from DSP, so how relevant it is in SGD is debatable)
 
         super().__init__(lr)
