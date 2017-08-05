@@ -1208,7 +1208,7 @@ class Learner:
 
     @property
     def final_rate(self):
-        return self.rate_at(self.epochs - 1)
+        return self.rate_at(self.epochs - 1e-8)
 
 class AnnealingLearner(Learner):
     def __init__(self, optim, epochs=100, rate=None, halve_every=10):
