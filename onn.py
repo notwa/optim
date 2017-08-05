@@ -806,19 +806,19 @@ class DumbLearner(AnnealingLearner):
 
 # Components {{{1
 
-def _mr_make_norm(norm):
+def _mr_make_norm(norm, *args, **kwargs):
     def _mr_norm(y, width, depth, block, multi, activation, style, FC, d):
         skip = y
         merger = Sum()
         skip.feed(merger)
         z_start = skip
-        z_start = z_start.feed(norm())
+        z_start = z_start.feed(norm(*args, **kwargs))
         z_start = z_start.feed(activation())
         for _ in range(multi):
             z = z_start
             for j in range(block):
                 if j > 0:
-                    z = z.feed(norm())
+                    z = z.feed(norm(*args, **kwargs))
                     z = z.feed(activation())
                 z = z.feed(FC())
             z.feed(merger)
