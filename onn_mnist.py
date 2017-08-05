@@ -200,7 +200,7 @@ logs = DotMap(
 )
 
 def measure_error(quiet=False):
-    def print_error(name, inputs, outputs, comparison=None):
+    def print_error(name, inputs, outputs):
         loss, mloss, _, _ = ritual.test_batched(inputs, outputs, bs, return_losses='both')
 
         if not quiet:

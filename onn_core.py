@@ -787,10 +787,6 @@ class GeluApprox(Layer):
         return dY * self.sig * (1 + self.a * (1 - self.sig))
 
 class Softmax(Layer):
-    def __init__(self, axis=-1):
-        super().__init__()
-        self.axis = int(axis)
-
     def forward(self, X):
         alpha = np.max(X, axis=-1, keepdims=True)
         num = np.exp(X - alpha)
@@ -802,9 +798,8 @@ class Softmax(Layer):
         return (dY - np.sum(dY * self.sm, axis=-1, keepdims=True)) * self.sm
 
 class LogSoftmax(Softmax):
-    def __init__(self, axis=-1, eps=1e-6):
+    def __init__(self, eps=1e-6):
         super().__init__()
-        self.axis = int(axis)
         self.eps = _f(eps)
 
     def forward(self, X):
