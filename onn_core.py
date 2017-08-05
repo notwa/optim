@@ -1039,7 +1039,9 @@ class Ritual: # i'm just making up names at this point.
         return predicted
 
     def update(self):
-        self.learner.optim.update(self.model.dW, self.model.W)
+        optim = self.learner.optim
+        optim.model = self.model
+        optim.update(self.model.dW, self.model.W)
 
     def prepare(self, model):
         self.en = 0
