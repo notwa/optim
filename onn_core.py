@@ -184,6 +184,14 @@ class Weights:
 class Loss:
     pass
 
+class NLL(Loss): # Negative Log Likelihood
+    def forward(self, p, y):
+        correct = p * y
+        return np.mean(-correct)
+
+    def backward(self, p, y):
+        return -y / len(p)
+
 class CategoricalCrossentropy(Loss):
     # lifted from theano
 
@@ -203,7 +211,7 @@ class CategoricalCrossentropy(Loss):
 class Accuracy(Loss):
     # returns percentage of categories correctly predicted.
     # utilizes argmax(), so it cannot be used for gradient descent.
-    # use CategoricalCrossentropy for that instead.
+    # use CategoricalCrossentropy or NLL for that instead.
 
     def forward(self, p, y):
         correct = np.argmax(p, axis=-1) == np.argmax(y, axis=-1)

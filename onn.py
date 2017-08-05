@@ -83,14 +83,6 @@ class Confidence(Loss):
         dmax = p == np.max(p, axis=-1, keepdims=True)
         return detc * dmax
 
-class NLL(Loss): # Negative Log Likelihood
-    def forward(self, p, y):
-        correct = p * y
-        return np.mean(-correct)
-
-    def backward(self, p, y):
-        return -y / len(p)
-
 # Regularizers {{{1
 
 class SaturateRelu(Regularizer):
