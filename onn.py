@@ -149,7 +149,7 @@ class FTML(Optimizer):
         # same as Adam's vt.
         self.vt[:] = self.b2 * self.vt + (1 - self.b2) * dW * dW
 
-        # you can factor out "inner" out of Adam as well.
+        # you can factor "inner" out of Adam as well.
         inner = np.sqrt(self.vt / (1 - self.b2_t)) + self.eps
         self.dt[:] = (1 - self.b1_t) / lr * inner
 
