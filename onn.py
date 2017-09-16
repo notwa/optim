@@ -696,8 +696,8 @@ class StochMRitual(Ritual):
     # this probably doesn't make sense for regression problems,
     # let alone small models, but here it is anyway!
 
-    def __init__(self, learner=None, loss=None, mloss=None, gamma=0.5):
-        super().__init__(learner, loss, mloss)
+    def __init__(self, learner=None, gamma=0.5):
+        super().__init__(learner)
         self.gamma = _f(gamma)
 
     def prepare(self, model):
@@ -726,12 +726,12 @@ class StochMRitual(Ritual):
             #   np.clip(layer.W, -1, 1, out=layer.W)
 
 class NoisyRitual(Ritual):
-    def __init__(self, learner=None, loss=None, mloss=None,
+    def __init__(self, learner=None,
                  input_noise=0, output_noise=0, gradient_noise=0):
         self.input_noise = _f(input_noise)
         self.output_noise = _f(output_noise)
         self.gradient_noise = _f(gradient_noise)
-        super().__init__(learner, loss, mloss)
+        super().__init__(learner)
 
     def learn(self, inputs, outputs):
         # this is pretty crude
@@ -1077,13 +1077,13 @@ def lookup_loss(maybe_name):
         return SomethingElse()
     raise Exception('unknown objective', maybe_name)
 
-def ritual_from_config(config, learner, loss, mloss):
+def ritual_from_config(config, learner):
     if config.ritual == 'default':
-        ritual = Ritual(learner=learner, loss=loss, mloss=mloss)
+        ritual = Ritual(learner=learner)
     elif config.ritual == 'stochm':
-        ritual = StochMRitual(learner=learner, loss=loss, mloss=mloss)
+        ritual = StochMRitual(learner=learner)
     elif config.ritual == 'noisy':
-        ritual = NoisyRitual(learner=learner, loss=loss, mloss=mloss,
+        ritual = NoisyRitual(learner=learner,
                              input_noise=1e-1, output_noise=1e-2,
                              gradient_noise=2e-7)
     else:
@@ -1105,7 +1105,10 @@ def model_from_config(config, input_features, output_features, callbacks=None):
     if y.output_shape[0] != output_features:
         y = y.feed(Dense(output_features, init))
 
-    model = Model(x, y, unsafe=config.unsafe)
+    loss = lookup_loss(config.loss)
+    mloss = lookup_loss(config.mloss) if config.mloss else loss
+
+    model = Model(x, y, loss=loss, mloss=mloss, unsafe=config.unsafe)
 
     if config.fn_load is not None:
         log('loading weights', config.fn_load)
@@ -1122,10 +1125,7 @@ def model_from_config(config, input_features, output_features, callbacks=None):
 
     learner = learner_from_config(config, optim, rscb)
 
-    loss = lookup_loss(config.loss)
-    mloss = lookup_loss(config.mloss) if config.mloss else loss
-
-    ritual = ritual_from_config(config, learner, loss, mloss)
+    ritual = ritual_from_config(config, learner)
 
     return model, learner, ritual
 
@@ -1234,8 +1234,8 @@ def run(program, args=None):
 
     def measure_error():
         def print_error(name, inputs, outputs, comparison=None):
-            predicted = model.forward(inputs)
-            err = ritual.mloss.forward(predicted, outputs)
+            predicted = model.evaluate(inputs)
+            err = model.mloss.forward(predicted, outputs)
             if config.log10_loss:
                 print(name, "{:12.6e}".format(err))
                 if comparison:
@@ -1272,7 +1272,7 @@ def run(program, args=None):
 
         # use plain SGD in warmup to prevent (or possibly cause?) numeric issues
         temp_optim = learner.optim
-        temp_loss = ritual.loss
+        temp_loss = model.loss
         learner.optim = Optimizer(lr=0.001)
         ritual.loss = Absolute() # less likely to blow up; more general
 
@@ -1292,7 +1292,7 @@ def run(program, args=None):
             ritual.reset()
 
         learner.optim = temp_optim
-        ritual.loss = temp_loss
+        model.loss = temp_loss
 
     if training:
         measure_error()

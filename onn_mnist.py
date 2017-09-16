@@ -145,7 +145,13 @@ y = y.feed(Dense(mnist_classes, init=init_glorot_uniform,
                  reg_w=final_reg, reg_b=final_reg))
 y = y.feed(output_activation())
 
-model = Model(x, y, unsafe=True)
+if output_activation in (Softmax, Sigmoid):
+    loss = CategoricalCrossentropy()
+else:
+    loss = SquaredHalved()
+mloss = Accuracy()
+
+model = Model(x, y, loss=loss, mloss=mloss, unsafe=True)
 
 def rscb(restart):
     log("restarting", restart)
@@ -176,12 +182,7 @@ else:
         lament('WARNING: no learning rate schedule selected.')
     learner = Learner(optim, epochs=epochs)
 
-loss = CategoricalCrossentropy() if output_activation == Softmax else SquaredHalved()
-mloss = Accuracy()
-
-ritual = Ritual(learner=learner, loss=loss, mloss=mloss)
-#ritual = NoisyRitual(learner=learner, loss=loss, mloss=mloss,
-#                     input_noise=1e-1, output_noise=3.2e-2, gradient_noise=1e-1)
+ritual = Ritual(learner=learner)
 
 model.print_graph()
 log('parameters', model.param_count)

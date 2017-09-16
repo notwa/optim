@@ -884,13 +884,17 @@ class Dense(Layer):
 # Models {{{1
 
 class Model:
-    def __init__(self, nodes_in, nodes_out, unsafe=False):
+    def __init__(self, nodes_in, nodes_out, loss=None, mloss=None, unsafe=False):
+        self.loss = loss if loss is not None else SquaredHalved()
+        self.mloss = mloss if mloss is not None else loss
+
         nodes_in  = [nodes_in]  if isinstance(nodes_in,  Layer) else nodes_in
         nodes_out = [nodes_out] if isinstance(nodes_out, Layer) else nodes_out
         assert type(nodes_in)  == list, type(nodes_in)
         assert type(nodes_out) == list, type(nodes_out)
         self.nodes_in = nodes_in
         self.nodes_out = nodes_out
+
         self.nodes = traverse_all(self.nodes_in, self.nodes_out)
         self.make_weights()
         for node in self.nodes:
@@ -928,22 +932,40 @@ class Model:
                 assert inner_offset >= node.size, "Layer {} allocated less weights than it said it would".format(node)
                 offset += node.size
 
-    def forward(self, X, deterministic=False):
+    def evaluate(self, inputs, deterministic=True):
         values = dict()
         input_node = self.nodes[0]
         output_node = self.nodes[-1]
-        values[input_node] = input_node._propagate(np.expand_dims(X, 0), deterministic)
+        values[input_node] = input_node._propagate(np.expand_dims(inputs, 0), deterministic)
         for node in self.nodes[1:]:
             values[node] = node.propagate(values, deterministic)
         return values[output_node]
 
-    def backward(self, error):
+    def apply(self, error): # TODO: better name?
         values = dict()
+        input_node = self.nodes[0]
         output_node = self.nodes[-1]
         values[output_node] = output_node._backpropagate(np.expand_dims(error, 0))
         for node in reversed(self.nodes[:-1]):
             values[node] = node.backpropagate(values)
-        return self.dW
+        return values[input_node]
+
+    def forward(self, inputs, outputs, measure=False, deterministic=False):
+        predicted = self.evaluate(inputs, deterministic=deterministic)
+        if measure:
+            error = self.mloss.forward(predicted, outputs)
+        else:
+            error = self.loss.forward(predicted, outputs)
+        return error, predicted
+
+    def backward(self, predicted, outputs, measure=False):
+        if measure:
+            error = self.mloss.backward(predicted, outputs)
+        else:
+            error = self.loss.backward(predicted, outputs)
+        # input_delta is rarely useful; it's just to match the forward pass.
+        input_delta = self.apply(error)
+        return self.dW, input_delta
 
     def clear_grad(self):
         for node in self.nodes:
@@ -1028,11 +1050,8 @@ class Model:
 # Rituals {{{1
 
 class Ritual: # i'm just making up names at this point.
-    def __init__(self, learner=None, loss=None, mloss=None):
-        # TODO: store loss and mloss in Model instead of here.
+    def __init__(self, learner=None):
         self.learner = learner if learner is not None else Learner(Optimizer())
-        self.loss = loss if loss is not None else Squared()
-        self.mloss = mloss if mloss is not None else loss
         self.model = None
 
     def reset(self):
@@ -1041,10 +1060,10 @@ class Ritual: # i'm just making up names at this point.
         self.bn = 0
 
     def learn(self, inputs, outputs):
-        predicted = self.model.forward(inputs)
-        self.model.backward(self.loss.backward(predicted, outputs))
+        error, predicted = self.model.forward(inputs, outputs)
+        self.model.backward(predicted, outputs)
         self.model.regulate()
-        return predicted
+        return error, predicted
 
     def update(self):
         optim = self.learner.optim
@@ -1062,14 +1081,14 @@ class Ritual: # i'm just making up names at this point.
             self.learner.batch(b / batch_count)
 
         if test_only:
-            predicted = self.model.forward(batch_inputs, deterministic=True)
+            predicted = self.model.evaluate(batch_inputs, deterministic=True)
         else:
-            predicted = self.learn(batch_inputs, batch_outputs)
+            error, predicted = self.learn(batch_inputs, batch_outputs)
             self.model.regulate_forward()
             self.update()
 
         if loss_logging:
-            batch_loss = self.loss.forward(predicted, batch_outputs)
+            batch_loss = self.model.loss.forward(predicted, batch_outputs)
             if np.isnan(batch_loss):
                 raise Exception("nan")
             self.losses.append(batch_loss)
@@ -1077,7 +1096,7 @@ class Ritual: # i'm just making up names at this point.
 
         if mloss_logging:
             # NOTE: this can use the non-deterministic predictions. fixme?
-            batch_mloss = self.mloss.forward(predicted, batch_outputs)
+            batch_mloss = self.model.mloss.forward(predicted, batch_outputs)
             if np.isnan(batch_mloss):
                 raise Exception("nan")
             self.mlosses.append(batch_mloss)
