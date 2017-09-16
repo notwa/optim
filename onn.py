@@ -1273,7 +1273,7 @@ def run(program, args=None):
         # use plain SGD in warmup to prevent (or possibly cause?) numeric issues
         temp_optim = learner.optim
         temp_loss = model.loss
-        learner.optim = Optimizer(lr=0.001)
+        learner.optim = MomentumClip(lr=0.01, mu=0)
         ritual.loss = Absolute() # less likely to blow up; more general
 
         # NOTE: experiment: trying const batches and batch_size
