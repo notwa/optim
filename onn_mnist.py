@@ -220,8 +220,8 @@ def measure_error(quiet=False):
 measure_error()
 
 while learner.next():
-    act_t = (learner.epoch - 1) / (learner.epochs - 1)
     if actreg_lamb:
+        act_t = (learner.epoch - 1) / (learner.epochs - 1)
         for node in model.ordered_nodes:
             if isinstance(node, ActivityRegularizer):
                 node.reg.lamb = act_t * node.reg.lamb_orig # HACK
