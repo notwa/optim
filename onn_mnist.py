@@ -70,7 +70,7 @@ else:
 
     load_fn = None
     save_fn = 'mnist.h5'
-    log_fn = 'mnist_losses.npz'
+    log_fn = 'floss{}.npz'
 
     fn = 'mnist.npz'
     mnist_dim = 28
@@ -253,9 +253,16 @@ if save_fn is not None:
     model.save_weights(save_fn, overwrite=True)
 
 if log_fn:
-    log('saving losses', log_fn)
     kwargs = dict()
     for k, v in logs.items():
         if len(v) > 0:
             kwargs[k] = np.array(v, dtype=_f)
+    if '{}' in log_fn:
+        from os.path import exists
+        for i in range(10000):
+            candidate = log_fn.format(i)
+            if not exists(candidate):
+                log_fn = candidate
+                break
+    log('saving losses', log_fn)
     np.savez_compressed(log_fn, **kwargs)
