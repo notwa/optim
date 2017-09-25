@@ -71,7 +71,7 @@ class Confidence(Loss):
         categories = p.shape[-1]
         confidence = (np.max(p, axis=-1) - 1/categories) / (1 - 1/categories)
         # the exponent in softmax puts a maximum on confidence,
-        # but we don't compensate for that.  if necessary,
+        # but we don't compensate for that. if necessary,
         # it'd be better to use an activation that doesn't have this limit.
         return np.mean(confidence)
 
@@ -1102,6 +1102,8 @@ def lookup_loss(maybe_name):
         return Absolute()
     elif maybe_name == 'msee':
         return SomethingElse()
+    elif maybe_name == 'huber':
+        return Huber(delta=0.1)
     raise Exception('unknown objective', maybe_name)
 
 def ritual_from_config(config, learner):

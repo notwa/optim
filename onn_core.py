@@ -249,6 +249,20 @@ class Absolute(ResidualLoss):
     def df(self, r):
         return np.sign(r)
 
+class Huber(ResidualLoss):
+    def __init__(self, delta=1.0):
+        self.delta = _f(delta)
+
+    def f(self, r):
+        return np.where(r <= self.delta,
+                        np.square(r) / 2,
+                        self.delta * (np.abs(r) - self.delta / 2))
+
+    def df(self, r):
+        return np.where(r <= self.delta,
+                        r,
+                        self.delta * np.sign(r))
+
 # Regularizers {{{1
 
 class Regularizer:
