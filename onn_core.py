@@ -1133,6 +1133,7 @@ class Ritual: # i'm just making up names at this point.
                       return_losses=False, test_only=False, shuffle=True,
                       clear_grad=True):
         assert isinstance(return_losses, bool) or return_losses == 'both'
+        assert self.model is not None
 
         gen = isinstance(inputs_or_generator, types.GeneratorType)
         if gen:
