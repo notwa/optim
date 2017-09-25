@@ -37,7 +37,7 @@ numpy scipy h5py sklearn dotmap
 #!/usr/bin/env python3
 from onn_core import *
 bs = 500
-lr = 0.0005 * np.sqrt(bs)
+lr = 0.01
 reg = L1L2(3.2e-5, 3.2e-4)
 final_reg = L1L2(3.2e-5, 1e-3)
 
@@ -56,11 +56,11 @@ y = y.feed(Dropout(0.05))
 y = y.feed(Relu())
 y = y.feed(Dense(10, init=init_glorot_uniform, reg_w=final_reg, reg_b=final_reg))
 y = y.feed(Softmax())
-model = Model(x, y, unsafe=True)
+model = Model(x, y, loss=CategoricalCrossentropy(), mloss=Accuracy(), unsafe=True)
 
 optim = Adam()
-learner = SGDR(optim, epochs=20, rate=lr, restarts=2)
-ritual = Ritual(learner=learner, loss=CategoricalCrossentropy(), mloss=Accuracy())
+learner = SGDR(optim, epochs=20, rate=lr, restarts=1)
+ritual = Ritual(learner=learner)
 ritual.prepare(model)
 while learner.next():
     print("epoch", learner.epoch)
@@ -69,11 +69,11 @@ while learner.next():
 
 def print_error(name, inputs, outputs):
     loss, mloss, _, _ = ritual.test_batched(inputs, outputs, bs, return_losses='both')
-    predicted = ritual.model.forward(inputs, deterministic=True)
     print(name + " loss", "{:12.6e}".format(loss))
     print(name + " accuracy", "{:6.2f}%".format(mloss * 100))
 print_error("train", inputs, outputs)
 print_error("valid", valid_inputs, valid_outputs)
+predicted = model.evaluate(inputs) # use this as you will!
 ```
 
 ## contributing
