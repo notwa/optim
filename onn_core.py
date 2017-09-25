@@ -1271,7 +1271,7 @@ class AnnealingLearner(Learner):
         super().__init__(optim, epochs, rate)
 
     def rate_at(self, epoch):
-        return self.start_rate * self.anneal**epoch
+        return super().rate_at(epoch) * self.anneal**epoch
 
 def cosmod(x):
     # plot: https://www.desmos.com/calculator/hlgqmyswy2
