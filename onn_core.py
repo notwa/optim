@@ -1331,9 +1331,6 @@ class SGDR(Learner):
         return True
 
 class TriangularCLR(Learner):
-    # note: i haven't actually read (nor seen) the paper(s) on CLR,
-    # but this case (triangular) should be pretty difficult to get wrong.
-
     per_batch = True
 
     def __init__(self, optim, epochs=400, upper_rate=None, lower_rate=0,
