@@ -291,7 +291,7 @@ class Optimizer:
     def update(self, dW, W):
         W += self.compute(dW, W)
 
-# the following optimizers are blatantly lifted from tiny-dnn:
+# some of the the following optimizers are blatantly lifted from tiny-dnn:
 # https://github.com/tiny-dnn/tiny-dnn/blob/master/tiny_dnn/optimizers/optimizer.h
 
 class Momentum(Optimizer):
@@ -315,10 +315,25 @@ class Momentum(Optimizer):
 
         return V
 
+class Adagrad(Optimizer):
+    def __init__(self, lr=0.01, eps=1e-8):
+        self.eps = _f(eps)
+
+        super().__init__(lr)
+
+    def reset(self):
+        self.g = None
+
+    def compute(self, dW, W):
+        if self.g is None:
+            self.g = np.zeros_like(dW)
+
+        self.g += np.square(dW)
+        return -self.lr * dW / (np.sqrt(self.g) + self.eps)
+
 class RMSprop(Optimizer):
     # RMSprop generalizes* Adagrad, etc.
 
-    # TODO: verify this is correct:
     # * RMSprop == Adagrad when
     #   RMSprop.mu == 1
 

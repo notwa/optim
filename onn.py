@@ -1028,6 +1028,8 @@ def optim_from_config(config):
             raise Exception("yellowfin only uses one decay term.")
         beta = np.exp(-1/d1)
         optim = YellowFin(beta=beta)
+    elif config.optim in ('ag', 'adagrad'):
+        optim = Adagrad()
     elif config.optim in ('rms', 'rmsprop'):
         d2 = config.optim_decay2 if 'optim_decay2' in config else 99.5
         mu = np.exp(-1/d2)
