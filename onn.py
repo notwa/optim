@@ -312,6 +312,56 @@ class YellowFin(Optimizer):
         self.beta_t *= self.beta
         return V
 
+class AddSign(Optimizer):
+    # paper: https://arxiv.org/abs/1709.07417
+
+    def __init__(self, lr=0.01, mu=0.9, alpha=1):
+        self.mu = _f(mu)
+        self.alpha = _f(alpha)
+
+        super().__init__(lr)
+
+    def reset(self):
+        self.accum = None
+
+    def compute(self, dW, W):
+        if self.accum is None:
+            self.accum = np.zeros_like(dW)
+
+        self.accum[:] = self.accum * self.mu + dW
+
+        signed = np.sign(dW) * np.sign(self.accum)
+        #signed *= decay
+
+        return -self.lr * dW * (self.alpha + signed)
+
+class PowerSign(Optimizer):
+    # paper: https://arxiv.org/abs/1709.07417
+
+    def __init__(self, lr=0.01, mu=0.9, alpha=np.e):
+        self.mu = _f(mu)
+        self.alpha = _f(alpha)
+        self.use_exp = np.isclose(self.alpha, _f(np.e))
+
+        super().__init__(lr)
+
+    def reset(self):
+        self.accum = None
+
+    def compute(self, dW, W):
+        if self.accum is None:
+            self.accum = np.zeros_like(dW)
+
+        self.accum[:] = self.accum * self.mu + dW
+
+        signed = np.sign(dW) * np.sign(self.accum)
+        #signed *= decay
+
+        if self.use_exp:
+            return -self.lr * dW * np.exp(signed)
+        else:
+            return -self.lr * dW * np.power(self.alpha, signed)
+
 # Nonparametric Layers {{{1
 
 class AlphaDropout(Layer):
