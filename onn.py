@@ -820,32 +820,6 @@ class PolyLearner(Learner):
         ret = np.polyval(self.coeffs, progress)
         return np.abs(ret)
 
-class DumbLearner(AnnealingLearner):
-    # this is my own awful contraption. it's not really "SGD with restarts".
-    def __init__(self, optim, epochs=100, rate=None, halve_every=10,
-                 restarts=0, restart_advance=20, callback=None):
-        self.restart_epochs = int(epochs)
-        self.restarts = int(restarts)
-        self.restart_advance = float(restart_advance)
-        self.restart_callback = callback
-        epochs = self.restart_epochs * (self.restarts + 1)
-        super().__init__(optim, epochs, rate, halve_every)
-
-    def rate_at(self, epoch):
-        sub_epoch = epoch % self.restart_epochs
-        restart = epoch // self.restart_epochs
-        return super().rate_at(sub_epoch) * (self.anneal**self.restart_advance)**restart
-
-    def next(self):
-        if not super().next():
-            return False
-        sub_epoch = self.epoch % self.restart_epochs
-        restart = self.epoch // self.restart_epochs
-        if restart > 0 and sub_epoch == 0:
-            if self.restart_callback is not None:
-                self.restart_callback(restart)
-        return True
-
 # Components {{{1
 
 def _mr_make_norm(norm, *args, **kwargs):
@@ -1100,13 +1074,6 @@ def learner_from_config(config, optim, rscb):
         learner = AnnealingLearner(optim, epochs=config.epochs, rate=config.learn,
                                    halve_every=config.learn_halve_every)
         log("final learning rate", "{:10.8f}".format(learner.final_rate))
-    elif config.learner == 'dumb':
-        learner = DumbLearner(optim, epochs=config.epochs, rate=config.learn,
-                              halve_every=config.learn_halve_every,
-                              restarts=config.restarts,
-                              restart_advance=config.learn_restart_advance,
-                              callback=rscb)
-        log("final learning rate", "{:10.8f}".format(learner.final_rate))
     elif config.learner == 'sgd':
         learner = Learner(optim, epochs=config.epochs, rate=config.learn)
     else:
@@ -1218,7 +1185,7 @@ def run(program, args=None):
         learner = 'sgdr',
         learn = 0.00125,
         epochs = 24,
-        learn_halve_every = 16, # only used with anneal/dumb
+        learn_halve_every = 16, # only used with anneal
         restarts = 4,
         restart_decay = 0.25, # only used with SGDR
         expando = lambda i: 24 * i,
