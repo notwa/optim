@@ -1043,6 +1043,14 @@ def optim_from_config(config):
                 optim = Momentum(mu=b1, nesterov=config.nesterov)
         else:
             optim = Optimizer()
+    elif config.optim == 'ps':
+        d1 = config.optim_decay1 if 'optim_decay1' in config else 9.5
+        b1 = np.exp(-1/d1)
+        optim = PowerSign(mu=b1)
+    elif config.optim == 'as':
+        d1 = config.optim_decay1 if 'optim_decay1' in config else 9.5
+        b1 = np.exp(-1/d1)
+        optim = AddSign(mu=b1)
     else:
         raise Exception('unknown optimizer', config.optim)
 
