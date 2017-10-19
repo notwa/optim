@@ -703,7 +703,7 @@ class CosineDense(Dense):
           + 1 + self.eps)
         self.W_norm = np.sqrt(np.square(self.coeffs.f).sum(0, keepdims=True) \
           + np.square(self.biases.f) + self.eps)
-        self.dot = X.dot(self.coeffs.f) + self.biases.f
+        self.dot = X @ self.coeffs.f + self.biases.f
         Y = self.dot / (self.X_norm * self.W_norm)
         return Y
 
@@ -712,11 +712,11 @@ class CosineDense(Dense):
         dX_norm = -(dY * self.dot / self.W_norm).sum(-1, keepdims=True) / self.X_norm**2
         dW_norm = -(dY * self.dot / self.X_norm).sum( 0, keepdims=True) / self.W_norm**2
 
-        self.coeffs.g += self.X.T.dot(ddot)         \
+        self.coeffs.g += self.X.T @ ddot            \
           + dW_norm / self.W_norm * self.coeffs.f
         self.biases.g += ddot.sum(0, keepdims=True) \
           + dW_norm / self.W_norm * self.biases.f
-        dX = ddot.dot(self.coeffs.f.T) + dX_norm / self.X_norm * self.X
+        dX = ddot @ self.coeffs.f.T + dX_norm / self.X_norm * self.X
 
         return dX
 

@@ -903,12 +903,12 @@ class Dense(Layer):
 
     def forward(self, X):
         self.X = X
-        return X.dot(self.coeffs.f) + self.biases.f
+        return X @ self.coeffs.f + self.biases.f
 
     def backward(self, dY):
-        self.coeffs.g += self.X.T.dot(dY)
+        self.coeffs.g += self.X.T @ dY
         self.biases.g += dY.sum(0, keepdims=True)
-        return dY.dot(self.coeffs.f.T)
+        return dY @ self.coeffs.f.T
 
 # Models {{{1
 
