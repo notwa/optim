@@ -1377,8 +1377,8 @@ class TriangularCLR(Learner):
         return np.abs(((epoch - 1 + offset) % self.frequency) - offset) / offset
 
     def rate_at(self, epoch):
-        # NOTE: start_rate is treated as upper_rate
-        return self._t(epoch) * (self.start_rate - self.lower_rate) + self.lower_rate
+        upper_rate = self.start_rate if self.start_rate is not None else self.optim.lr
+        return self._t(epoch) * (upper_rate - self.lower_rate) + self.lower_rate
 
     def next(self):
         if not super().next():
