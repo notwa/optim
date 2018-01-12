@@ -362,6 +362,65 @@ class PowerSign(Optimizer):
         else:
             return -self.lr * dW * np.power(self.alpha, signed)
 
+class Neumann(Optimizer):
+    # paper: https://arxiv.org/abs/1712.03298
+    # NOTE: this implementation is missing resetting as described in the paper.
+    #       resetting is totally disabled for now.
+    # NOTE: this implementation does not use vanilla SGD for its first epochs.
+    #       you should do this yourself if you need it.
+    #       it seems like using a Learner like SineCLR makes this unnecessary.
+
+    def __init__(self, lr=0.01):
+        self.alpha = _f(1e-7) # cubic.
+        self.beta = _f(1e-5) # repulsive. NOTE: multiplied by len(dW) later.
+        self.gamma = _f(0.99) # EMA, or 1-pole low-pass parameter. same thing.
+        # momentum is ∝ (in the shape of) 1 - 1/(1 + t)
+        self.mu_min = _f(0.5)
+        self.mu_max = _f(0.9)
+        self.reset_period = 0 # TODO
+
+        super().__init__(lr)
+
+    def reset(self):
+        # NOTE: mt and vt are different than the pair in Adam-like optimizers.
+        self.mt = None # momentum accumulator.
+        self.vt = None # weight accumulator.
+        self.t = 0
+
+    def compute(self, dW, W):
+        raise Exception("compute() is not available for this Optimizer.")
+
+    def update(self, dW, W):
+        self.t += 1
+
+        if self.mt is None:
+            self.mt = np.zeros_like(dW)
+        if self.vt is None:
+            self.vt = np.zeros_like(dW)
+
+        if self.reset_period > 0 and (self.t - 1) % self.reset_period == 0:
+            self.mt = -self.lr * dW
+            return
+
+        mu = _1 - _1/_f(self.t) # the + 1 is implicit.
+        mu = (mu + self.mu_min) * (self.mu_max - self.mu_min)
+
+        delta = W - self.vt
+        delta_norm_squared = np.square(delta).sum()
+        delta_norm = np.sqrt(delta_norm_squared)
+
+        alpha = self.alpha
+        beta = self.beta * dW.size
+
+        cubic_reg = alpha * delta_norm_squared
+        repulsive_reg = beta / delta_norm_squared
+        dt = dW + (cubic_reg - repulsive_reg) * (delta / delta_norm)
+
+        self.mt = mu * self.mt - self.lr * dt
+
+        W += mu * self.mt - self.lr * dt
+        self.vt = W + self.gamma * (self.vt - W)
+
 # Nonparametric Layers {{{1
 
 class AlphaDropout(Layer):
