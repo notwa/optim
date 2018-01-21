@@ -1,7 +1,7 @@
 import types
 import numpy as np
 
-from .floats import *
+from .float import *
 
 class Ritual: # i'm just making up names at this point.
     def __init__(self, learner=None):

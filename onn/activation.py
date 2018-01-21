@@ -3,7 +3,7 @@ import numpy as np
 # just for speed, not strictly essential:
 from scipy.special import expit as sigmoid
 
-from .floats import *
+from .float import *
 from .layer_base import *
 
 class Identity(Layer):

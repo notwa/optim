@@ -1,8 +1,9 @@
 import sys
 
-from .floats import *
-from .nodes import *
+from .float import *
+from .nodal import *
 from .layer_base import *
+from .utility import *
 
 class Model:
     def __init__(self, nodes_in, nodes_out, loss=None, mloss=None, unsafe=False):

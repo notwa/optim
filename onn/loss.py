@@ -1,6 +1,6 @@
 import numpy as np
 
-from .floats import *
+from .float import *
 
 class Loss:
     def forward(self, p, y):

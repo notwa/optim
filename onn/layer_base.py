@@ -2,7 +2,7 @@ import numpy as np
 
 from collections import defaultdict, OrderedDict
 
-from .weights import *
+from .weight import *
 
 # used for numbering layers like Keras:
 _layer_counters = defaultdict(lambda: 0)

@@ -1,7 +1,8 @@
 import numpy as np
 
-from .floats import *
+from .float import *
 from .optimizer_base import *
+from .utility import *
 
 # some of the the following optimizers are blatantly lifted from tiny-dnn:
 # https://github.com/tiny-dnn/tiny-dnn/blob/master/tiny_dnn/optimizers/optimizer.h

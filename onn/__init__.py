@@ -5,20 +5,20 @@
 #           this is gonna take some work.
 
 from .activation import *
-from .floats import *
+from .float import *
 from .initialization import *
 from .layer import *
 from .learner import *
 from .loss import *
 from .math import *
 from .model import *
-from .nodes import *
+from .nodal import *
 from .optimizer import *
 from .parametric import *
 from .regularizer import *
 from .ritual import *
-from .util import *
-from .weights import *
+from .utility import *
+from .weight import *
 
 # this is similar to default behaviour of having no __all__ variable at all,
 # but ours ignores modules as well. this allows for `import sys` and such

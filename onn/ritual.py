@@ -1,6 +1,6 @@
 import numpy as np
 
-from .floats import *
+from .float import *
 from .initialization import *
 from .ritual_base import *
 
