@@ -1,0 +1,7 @@
+__pycache__
+*.pyc
+
+# work in progress:
+onn/component.py
+onn/extra.py
+onn/run.py

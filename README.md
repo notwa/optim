@@ -35,7 +35,7 @@ numpy scipy h5py sklearn dotmap
 
 ```python
 #!/usr/bin/env python3
-from onn_core import *
+from onn import *
 bs = 500
 lr = 0.01
 reg = L1L2(3.2e-5, 3.2e-4)

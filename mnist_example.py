@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 from onn import *
-from onn_core import _f
+from onn.floats import *
 from dotmap import DotMap
 
 lower_priority()
