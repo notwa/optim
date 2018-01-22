@@ -1,13 +1,14 @@
 from .float import *
 from .optimizer_base import *
 
+
 class Learner:
     per_batch = False
 
     def __init__(self, optim, epochs=100, rate=None):
         assert isinstance(optim, Optimizer)
         self.optim = optim
-        self.start_rate = rate # None is okay; it'll use optim.lr instead.
+        self.start_rate = rate  # None is okay; it'll use optim.lr instead.
         self.epochs = int(epochs)
         self.reset()
 
@@ -49,7 +50,7 @@ class Learner:
             return False
         return True
 
-    def batch(self, progress): # TODO: rename
+    def batch(self, progress):  # TODO: rename
         # interpolates rates between epochs.
         # unlike epochs, we do not store batch number as a state.
         # i.e. calling next() will not respect progress.
@@ -60,6 +61,7 @@ class Learner:
     def final_rate(self):
         return self.rate_at(self.epochs - 1e-8)
 
+
 class AnnealingLearner(Learner):
     def __init__(self, optim, epochs=100, rate=None, halve_every=10):
         self.halve_every = _f(halve_every)
@@ -69,9 +71,11 @@ class AnnealingLearner(Learner):
     def rate_at(self, epoch):
         return super().rate_at(epoch) * self.anneal**epoch
 
+
 def cosmod(x):
     # plot: https://www.desmos.com/calculator/hlgqmyswy2
     return (_1 + np.cos((x % _1) * _pi)) * _inv2
+
 
 class SGDR(Learner):
     # Stochastic Gradient Descent with Restarts
@@ -112,7 +116,8 @@ class SGDR(Learner):
         raise Exception('this should never happen.')
 
     def rate_at(self, epoch):
-        base_rate = self.start_rate if self.start_rate is not None else self.optim.lr
+        sr = self.start_rate
+        base_rate = sr if sr is not None else self.optim.lr
         restart, sub_epoch, next_restart = self.split_num(max(1, epoch))
         x = _f(sub_epoch - 1) / _f(next_restart)
         return base_rate * self.decay**_f(restart) * cosmod(x)
@@ -125,6 +130,7 @@ class SGDR(Learner):
             if self.restart_callback is not None:
                 self.restart_callback(restart)
         return True
+
 
 class TriangularCLR(Learner):
     per_batch = True
@@ -141,11 +147,14 @@ class TriangularCLR(Learner):
     def _t(self, epoch):
         # NOTE: this could probably be simplified
         offset = self.frequency / 2
-        return np.abs(((epoch - 1 + offset) % self.frequency) - offset) / offset
+        return np.abs(((epoch - 1 + offset) % self.frequency) - offset) \
+            / offset
 
     def rate_at(self, epoch):
-        upper_rate = self.start_rate if self.start_rate is not None else self.optim.lr
-        return self._t(epoch) * (upper_rate - self.lower_rate) + self.lower_rate
+        sr = self.start_rate
+        lr = self.lower_rate
+        upper_rate = sr if sr is not None else self.optim.lr
+        return self._t(epoch) * (upper_rate - lr) + lr
 
     def next(self):
         if not super().next():
@@ -156,13 +165,16 @@ class TriangularCLR(Learner):
                 self.callback(self.epoch // self.frequency)
         return True
 
+
 class SineCLR(TriangularCLR):
     def _t(self, epoch):
         return np.sin(_pi * _inv2 * super()._t(epoch))
 
+
 class WaveCLR(TriangularCLR):
     def _t(self, epoch):
         return _inv2 * (_1 - np.cos(_pi * super()._t(epoch)))
+
 
 # more
 
@@ -177,4 +189,3 @@ class PolyLearner(Learner):
         progress = (epoch - 1) / (self.epochs)
         ret = np.polyval(self.coeffs, progress)
         return np.abs(ret)
-

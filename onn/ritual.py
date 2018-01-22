@@ -4,6 +4,7 @@ from .float import *
 from .initialization import *
 from .ritual_base import *
 
+
 def stochastic_multiply(W, gamma=0.5, allow_negation=False):
     # paper: https://arxiv.org/abs/1606.01981
 
@@ -23,6 +24,7 @@ def stochastic_multiply(W, gamma=0.5, allow_negation=False):
         mult *= np.where(samples < prob, 1, -1)
     np.multiply(W, mult, out=W)
 
+
 class StochMRitual(Ritual):
     # paper: https://arxiv.org/abs/1606.01981
     # this probably doesn't make sense for regression problems,
@@ -38,8 +40,8 @@ class StochMRitual(Ritual):
 
     def learn(self, inputs, outputs):
         # an experiment:
-        #assert self.learner.rate < 10, self.learner.rate
-        #self.gamma = 1 - 1/2**(1 - np.log10(self.learner.rate))
+        # assert self.learner.rate < 10, self.learner.rate
+        # self.gamma = 1 - 1/2**(1 - np.log10(self.learner.rate))
 
         self.W[:] = self.model.W
         for layer in self.model.ordered_nodes:
@@ -57,6 +59,7 @@ class StochMRitual(Ritual):
                 np.clip(layer.W, -layer.std * f, layer.std * f, out=layer.W)
             #   np.clip(layer.W, -1, 1, out=layer.W)
 
+
 class NoisyRitual(Ritual):
     def __init__(self, learner=None,
                  input_noise=0, output_noise=0, gradient_noise=0):
@@ -69,7 +72,7 @@ class NoisyRitual(Ritual):
         # this is pretty crude
         if self.input_noise > 0:
             s = self.input_noise
-            inputs =   inputs + np.random.normal(0, s, size=inputs.shape)
+            inputs = inputs + np.random.normal(0, s, size=inputs.shape)
         if self.output_noise > 0:
             s = self.output_noise
             outputs = outputs + np.random.normal(0, s, size=outputs.shape)
@@ -80,11 +83,10 @@ class NoisyRitual(Ritual):
         if self.gradient_noise > 0:
             size = len(self.model.dW)
             gamma = 0.55
-            #s = self.gradient_noise / (1 + self.bn) ** gamma
+            # s = self.gradient_noise / (1 + self.bn) ** gamma
             # experiments:
             s = self.gradient_noise * np.sqrt(self.learner.rate)
-            #s = np.square(self.learner.rate)
-            #s = self.learner.rate / self.en
+            # s = np.square(self.learner.rate)
+            # s = self.learner.rate / self.en
             self.model.dW += np.random.normal(0, max(s, 1e-8), size=size)
         super().update()
-

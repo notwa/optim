@@ -7,9 +7,10 @@ from .utility import *
 # some of the the following optimizers are blatantly lifted from tiny-dnn:
 # https://github.com/tiny-dnn/tiny-dnn/blob/master/tiny_dnn/optimizers/optimizer.h
 
+
 class Momentum(Optimizer):
     def __init__(self, lr=0.01, mu=0.9, nesterov=False):
-        self.mu = _f(mu) # momentum
+        self.mu = _f(mu)  # momentum
         self.nesterov = bool(nesterov)
 
         super().__init__(lr)
@@ -28,6 +29,7 @@ class Momentum(Optimizer):
 
         return V
 
+
 class Adagrad(Optimizer):
     def __init__(self, lr=0.01, eps=1e-8):
         self.eps = _f(eps)
@@ -44,6 +46,7 @@ class Adagrad(Optimizer):
         self.g += np.square(dW)
         return -self.lr * dW / (np.sqrt(self.g) + self.eps)
 
+
 class RMSprop(Optimizer):
     # RMSprop generalizes* Adagrad, etc.
 
@@ -51,7 +54,7 @@ class RMSprop(Optimizer):
     #   RMSprop.mu == 1
 
     def __init__(self, lr=1e-4, mu=0.99, eps=1e-8):
-        self.mu = _f(mu) # decay term
+        self.mu = _f(mu)  # decay term
         self.eps = _f(eps)
 
         # one might consider the following equation when specifying mu:
@@ -70,11 +73,12 @@ class RMSprop(Optimizer):
         if self.g is None:
             self.g = np.zeros_like(dW)
 
-        # basically apply a first-order low-pass filter to delta squared
+        # basically apply a first-order low-pass filter to delta squared,
         self.g += (1 - self.mu) * (np.square(dW) - self.g)
 
-        # finally sqrt it to complete the running root-mean-square approximation
+        # and sqrt it to complete the running root-mean-square approximation.
         return -self.lr * dW / (np.sqrt(self.g) + self.eps)
+
 
 class RMSpropCentered(Optimizer):
     # referenced TensorFlow/PyTorch.
@@ -115,9 +119,10 @@ class RMSpropCentered(Optimizer):
         self.delta[:] = self.momentum * self.delta + self.lr * temp
         return -self.delta
         # PyTorch does it this way.
-        #self.delta[:] = self.momentum * self.delta + temp
-        #return -self.lr * self.delta
+        # self.delta[:] = self.momentum * self.delta + temp
+        # return -self.lr * self.delta
         # they are equivalent only when LR is constant, which it might not be.
+
 
 class Adam(Optimizer):
     # paper: https://arxiv.org/abs/1412.6980
@@ -130,10 +135,10 @@ class Adam(Optimizer):
     #   Adam.b2 == RMSprop.mu
 
     def __init__(self, lr=0.002, b1=0.9, b2=0.999, eps=1e-8):
-        self.b1 = _f(b1) # decay term
-        self.b2 = _f(b2) # decay term
-        self.b1_t_default = _f(b1) # decay term power t
-        self.b2_t_default = _f(b2) # decay term power t
+        self.b1 = _f(b1)  # decay term
+        self.b2 = _f(b2)  # decay term
+        self.b1_t_default = _f(b1)  # decay term power t
+        self.b2_t_default = _f(b2)  # decay term power t
         self.eps = _f(eps)
 
         super().__init__(lr)
@@ -159,18 +164,20 @@ class Adam(Optimizer):
         self.vt += (1 - self.b2) * (np.square(dW) - self.vt)
 
         return -self.lr * (self.mt / (1 - self.b1_t)) \
-                / (np.sqrt(self.vt / (1 - self.b2_t)) + self.eps)
+            / (np.sqrt(self.vt / (1 - self.b2_t)) + self.eps)
+
 
 class Nadam(Optimizer):
     # paper: https://arxiv.org/abs/1412.6980
     # paper: http://cs229.stanford.edu/proj2015/054_report.pdf
     # TODO: double-check this implementation. also read the damn paper.
-    # lifted from https://github.com/fchollet/keras/blob/5d38b04/keras/optimizers.py#L530
-    # lifted from https://github.com/jpilaul/IFT6266_project/blob/master/Models/Algo_Momentum.py
+    # lifted from:
+    # https://github.com/fchollet/keras/blob/5d38b04/keras/optimizers.py#L530
+    # https://github.com/jpilaul/IFT6266_project/blob/master/Models/Algo_Momentum.py
 
     def __init__(self, lr=0.002, b1=0.9, b2=0.999, eps=1e-8):
-        self.b1 = _f(b1) # decay term
-        self.b2 = _f(b2) # decay term
+        self.b1 = _f(b1)  # decay term
+        self.b2 = _f(b2)  # decay term
         self.eps = _f(eps)
 
         super().__init__(lr)
@@ -208,6 +215,7 @@ class Nadam(Optimizer):
 
         return -self.lr * mt_bar / (np.sqrt(vtp) + self.eps)
 
+
 # more
 
 class FTML(Optimizer):
@@ -216,8 +224,8 @@ class FTML(Optimizer):
 
     def __init__(self, lr=0.0025, b1=0.6, b2=0.999, eps=1e-8):
         self.iterations = _0
-        self.b1 = _f(b1) # decay term
-        self.b2 = _f(b2) # decay term
+        self.b1 = _f(b1)  # decay term
+        self.b2 = _f(b2)  # decay term
         self.eps = _f(eps)
 
         super().__init__(lr)
@@ -231,10 +239,14 @@ class FTML(Optimizer):
         self.b2_t = _1
 
     def compute(self, dW, W):
-        if self.dt1 is None: self.dt1 = np.zeros_like(dW)
-        if self.dt is None: self.dt = np.zeros_like(dW)
-        if self.vt is None: self.vt = np.zeros_like(dW)
-        if self.zt is None: self.zt = np.zeros_like(dW)
+        if self.dt1 is None:
+            self.dt1 = np.zeros_like(dW)
+        if self.dt is None:
+            self.dt = np.zeros_like(dW)
+        if self.vt is None:
+            self.vt = np.zeros_like(dW)
+        if self.zt is None:
+            self.zt = np.zeros_like(dW)
 
         # NOTE: we could probably rewrite these equations to avoid this copy.
         self.dt1[:] = self.dt[:]
@@ -259,6 +271,7 @@ class FTML(Optimizer):
 
         # subtract by weights to avoid having to override self.update.
         return -self.zt / self.dt - W
+
 
 class MomentumClip(Optimizer):
     def __init__(self, lr=0.01, mu=0.9, nesterov=False, clip=1.0, debug=False):
@@ -289,22 +302,25 @@ class MomentumClip(Optimizer):
         else:
             return -self.lr * self.accum
 
+
 class YellowFin(Optimizer):
     # paper: https://arxiv.org/abs/1706.03471
     # knowyourmeme: http://cs.stanford.edu/~zjian/project/YellowFin/
-    # author's implementation: https://github.com/JianGoForIt/YellowFin/blob/master/tuner_utils/yellowfin.py
-    # code lifted: https://gist.github.com/botev/f8b32c00eafee222e47393f7f0747666
+    # author's implementation:
+    # https://github.com/JianGoForIt/YellowFin/blob/master/tuner_utils/yellowfin.py
+    # code lifted:
+    # https://gist.github.com/botev/f8b32c00eafee222e47393f7f0747666
 
     def __init__(self, lr=0.1, mu=0.0, beta=0.999, window_size=20,
                  debias=True, clip=1.0):
         self.lr_default = _f(lr)
         self.mu_default = _f(mu)
         self.beta = _f(beta)
-        self.window_size = int(window_size) # curv_win_width
+        self.window_size = int(window_size)  # curv_win_width
         self.debias_enabled = bool(debias)
         self.clip = _f(clip)
 
-        self.mu = _f(mu) # momentum
+        self.mu = _f(mu)  # momentum
         super().__init__(lr)
 
     def reset(self):
@@ -316,13 +332,13 @@ class YellowFin(Optimizer):
         self.step = 0
         self.beta_t = self.beta
 
-        self.curv_win = np.zeros([self.window_size,], dtype=np.float32)
+        self.curv_win = np.zeros([self.window_size, ], dtype=np.float32)
 
         self.h_min = None
         self.h_max = None
 
         self.g_lpf = 0
-        #self.g_squared_lpf = 0
+        # self.g_squared_lpf = 0
         self.g_norm_squared_lpf = 0
         self.g_norm_lpf = 0
         self.h_min_lpf = 0
@@ -332,7 +348,8 @@ class YellowFin(Optimizer):
         self.mu_lpf = 0
 
     def get_lr_mu(self):
-        p = (np.square(self.dist_avg) * np.square(self.h_min)) / (2 * self.g_var)
+        p = (np.square(self.dist_avg) * np.square(self.h_min)) \
+            / (2 * self.g_var)
         w3 = p * (np.sqrt(0.25 + p / 27.0) - 0.5)
         w = np.power(w3, 1/3)
         y = w - p / (3 * w)
@@ -360,11 +377,11 @@ class YellowFin(Optimizer):
         total_norm = np.linalg.norm(dW)
         clip_scale = self.clip / (total_norm + 1e-6)
         if clip_scale < 1:
-            #print("clipping gradients; norm: {:10.5f}".format(total_norm))
+            # print("clipping gradients; norm: {:10.5f}".format(total_norm))
             dW *= clip_scale
 
-        #fmt = 'W std: {:10.7f}e-3,  dWstd: {:10.7f}e-3,  V std: {:10.7f}e-3'
-        #print(fmt.format(np.std(W), np.std(dW) * 100, np.std(V) * 100))
+        # fmt = 'W std: {:10.7f}e-3,  dWstd: {:10.7f}e-3,  V std: {:10.7f}e-3'
+        # print(fmt.format(np.std(W), np.std(dW) * 100, np.std(V) * 100))
 
         b = self.beta
         m1b = 1 - self.beta
@@ -380,30 +397,31 @@ class YellowFin(Optimizer):
         h_min_t = np.min(valid_window)
         h_max_t = np.max(valid_window)
 
-        self.g_lpf              = b * self.g_lpf              + m1b * g
-        #self.g_squared_lpf      = b * self.g_squared_lpf      + m1b * g_squared
-        self.g_norm_squared_lpf = b * self.g_norm_squared_lpf + m1b * g_norm_squared
-        self.g_norm_lpf         = b * self.g_norm_lpf         + m1b * g_norm
-        self.h_min_lpf          = b * self.h_min_lpf          + m1b * h_min_t
-        self.h_max_lpf          = b * self.h_max_lpf          + m1b * h_max_t
+        self.g_lpf = b * self.g_lpf + m1b * g
+        # self.g_squared_lpf = b * self.g_squared_lpf + m1b * g_squared
+        self.g_norm_squared_lpf = b * self.g_norm_squared_lpf \
+            + m1b * g_norm_squared
+        self.g_norm_lpf = b * self.g_norm_lpf + m1b * g_norm
+        self.h_min_lpf = b * self.h_min_lpf + m1b * h_min_t
+        self.h_max_lpf = b * self.h_max_lpf + m1b * h_max_t
 
-        g_avg              = debias * self.g_lpf
-        #g_squared_avg      = debias * self.g_squared_lpf
+        g_avg = debias * self.g_lpf
+        # g_squared_avg = debias * self.g_squared_lpf
         g_norm_squared_avg = debias * self.g_norm_squared_lpf
-        g_norm_avg         = debias * self.g_norm_lpf
-        self.h_min         = debias * self.h_min_lpf
-        self.h_max         = debias * self.h_max_lpf
+        g_norm_avg = debias * self.g_norm_lpf
+        self.h_min = debias * self.h_min_lpf
+        self.h_max = debias * self.h_max_lpf
         assert self.h_max >= self.h_min
 
         dist = g_norm_avg / g_norm_squared_avg
 
-        self.dist_lpf           = b * self.dist_lpf           + m1b * dist
+        self.dist_lpf = b * self.dist_lpf + m1b * dist
 
-        self.dist_avg      = debias * self.dist_lpf
+        self.dist_avg = debias * self.dist_lpf
 
         self.g_var = g_norm_squared_avg - np.sum(np.square(g_avg))
         # equivalently:
-        #self.g_var = np.sum(np.abs(g_squared_avg - np.square(g_avg)))
+        # self.g_var = np.sum(np.abs(g_squared_avg - np.square(g_avg)))
 
         if self.step > 0:
             lr_for_real, mu_for_real = self.get_lr_mu()
@@ -418,6 +436,7 @@ class YellowFin(Optimizer):
         self.step += 1
         self.beta_t *= self.beta
         return V
+
 
 class AddSign(Optimizer):
     # paper: https://arxiv.org/abs/1709.07417
@@ -438,9 +457,10 @@ class AddSign(Optimizer):
         self.accum[:] = self.accum * self.mu + dW
 
         signed = np.sign(dW) * np.sign(self.accum)
-        #signed *= decay
+        # signed *= decay
 
         return -self.lr * dW * (self.alpha + signed)
+
 
 class PowerSign(Optimizer):
     # paper: https://arxiv.org/abs/1709.07417
@@ -462,12 +482,13 @@ class PowerSign(Optimizer):
         self.accum[:] = self.accum * self.mu + dW
 
         signed = np.sign(dW) * np.sign(self.accum)
-        #signed *= decay
+        # signed *= decay
 
         if self.use_exp:
             return -self.lr * dW * np.exp(signed)
         else:
             return -self.lr * dW * np.power(self.alpha, signed)
+
 
 class Neumann(Optimizer):
     # paper: https://arxiv.org/abs/1712.03298
@@ -478,20 +499,20 @@ class Neumann(Optimizer):
     #       it seems like using a Learner like SineCLR makes this unnecessary.
 
     def __init__(self, lr=0.01):
-        self.alpha = _f(1e-7) # cubic.
-        self.beta = _f(1e-5) # repulsive. NOTE: multiplied by len(dW) later.
-        self.gamma = _f(0.99) # EMA, or 1-pole low-pass parameter. same thing.
+        self.alpha = _f(1e-7)  # cubic.
+        self.beta = _f(1e-5)  # repulsive. NOTE: multiplied by len(dW) later.
+        self.gamma = _f(0.99)  # EMA, or 1-pole low-pass parameter. same thing.
         # momentum is ∝ (in the shape of) 1 - 1/(1 + t)
         self.mu_min = _f(0.5)
         self.mu_max = _f(0.9)
-        self.reset_period = 0 # TODO
+        self.reset_period = 0  # TODO
 
         super().__init__(lr)
 
     def reset(self):
         # NOTE: mt and vt are different than the pair in Adam-like optimizers.
-        self.mt = None # momentum accumulator.
-        self.vt = None # weight accumulator.
+        self.mt = None  # momentum accumulator.
+        self.vt = None  # weight accumulator.
         self.t = 0
 
     def compute(self, dW, W):
@@ -510,7 +531,7 @@ class Neumann(Optimizer):
             return
 
         # momentum quantity:
-        mu = _1 - _1/_f(self.t) # the + 1 is implicit.
+        mu = _1 - _1/_f(self.t)  # the + 1 is implicit.
         mu = (mu + self.mu_min) * (self.mu_max - self.mu_min)
 
         # smoothed change in weights:
@@ -529,4 +550,3 @@ class Neumann(Optimizer):
         # weights and accumulator:
         W += mu * self.mt - self.lr * dt
         self.vt = W + self.gamma * (self.vt - W)
-

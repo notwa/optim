@@ -2,10 +2,12 @@ import numpy as np
 
 _f = np.float32
 
+
 def _check(a):
     assert isinstance(a, np.ndarray) or type(a) == _f, type(a)
     assert a.dtype == _f, a.dtype
     return a
+
 
 _0 = _f(0)
 _1 = _f(1)

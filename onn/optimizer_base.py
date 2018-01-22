@@ -2,9 +2,10 @@ import numpy as np
 
 from .float import *
 
+
 class Optimizer:
     def __init__(self, lr=0.1):
-        self.lr = _f(lr) # learning rate
+        self.lr = _f(lr)  # learning rate
         self.reset()
 
     def reset(self):
@@ -15,5 +16,3 @@ class Optimizer:
 
     def update(self, dW, W):
         W += self.compute(dW, W)
-
-

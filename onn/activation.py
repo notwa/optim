@@ -6,6 +6,7 @@ from scipy.special import expit as sigmoid
 from .float import *
 from .layer_base import *
 
+
 class Identity(Layer):
     def forward(self, X):
         return X
@@ -13,13 +14,15 @@ class Identity(Layer):
     def backward(self, dY):
         return dY
 
-class Sigmoid(Layer): # aka Logistic, Expit (inverse of Logit)
+
+class Sigmoid(Layer):  # aka Logistic, Expit (inverse of Logit)
     def forward(self, X):
         self.sig = sigmoid(X)
         return self.sig
 
     def backward(self, dY):
         return dY * self.sig * (1 - self.sig)
+
 
 class Softplus(Layer):
     # integral of Sigmoid.
@@ -31,6 +34,7 @@ class Softplus(Layer):
     def backward(self, dY):
         return dY * sigmoid(self.X)
 
+
 class Tanh(Layer):
     def forward(self, X):
         self.sig = np.tanh(X)
@@ -38,6 +42,7 @@ class Tanh(Layer):
 
     def backward(self, dY):
         return dY * (1 - self.sig * self.sig)
+
 
 class LeCunTanh(Layer):
     # paper: http://yann.lecun.com/exdb/publis/pdf/lecun-98b.pdf
@@ -53,6 +58,7 @@ class LeCunTanh(Layer):
     def backward(self, dY):
         return dY * (2 / 3 * 1.7159) * (1 - self.sig * self.sig)
 
+
 class Relu(Layer):
     def forward(self, X):
         self.cond = X >= 0
@@ -61,12 +67,13 @@ class Relu(Layer):
     def backward(self, dY):
         return np.where(self.cond, dY, 0)
 
+
 class Elu(Layer):
     # paper: https://arxiv.org/abs/1511.07289
 
     def __init__(self, alpha=1):
         super().__init__()
-        self.alpha = _f(alpha) # FIXME: unused
+        self.alpha = _f(alpha)  # FIXME: unused
 
     def forward(self, X):
         self.cond = X >= 0
@@ -75,6 +82,7 @@ class Elu(Layer):
 
     def backward(self, dY):
         return dY * np.where(self.cond, 1, self.neg + 1)
+
 
 class GeluApprox(Layer):
     # paper: https://arxiv.org/abs/1606.08415
@@ -88,6 +96,7 @@ class GeluApprox(Layer):
     def backward(self, dY):
         return dY * self.sig * (1 + self.a * (1 - self.sig))
 
+
 class Softmax(Layer):
     def forward(self, X):
         alpha = np.max(X, axis=-1, keepdims=True)
@@ -98,6 +107,7 @@ class Softmax(Layer):
 
     def backward(self, dY):
         return (dY - np.sum(dY * self.sm, axis=-1, keepdims=True)) * self.sm
+
 
 class LogSoftmax(Softmax):
     def __init__(self, eps=1e-6):
@@ -110,6 +120,7 @@ class LogSoftmax(Softmax):
     def backward(self, dY):
         return dY - np.sum(dY, axis=-1, keepdims=True) * self.sm
 
+
 class Cos(Layer):
     # performs well on MNIST for some strange reason.
 
@@ -119,6 +130,7 @@ class Cos(Layer):
 
     def backward(self, dY):
         return dY * -np.sin(self.X)
+
 
 class Selu(Layer):
     # paper: https://arxiv.org/abs/1706.02515
@@ -136,6 +148,7 @@ class Selu(Layer):
     def backward(self, dY):
         return dY * self.lamb * np.where(self.cond, 1, self.neg)
 
+
 # more
 
 class TanhTest(Layer):
@@ -145,6 +158,7 @@ class TanhTest(Layer):
 
     def backward(self, dY):
         return dY * (1 / 2 * 2.4004) * (1 - self.sig * self.sig)
+
 
 class ExpGB(Layer):
     # an output layer for one-hot classification problems.
@@ -162,6 +176,7 @@ class ExpGB(Layer):
     def backward(self, dY):
         # this gradient is intentionally incorrect.
         return dY
+
 
 class CubicGB(Layer):
     # an output layer for one-hot classification problems.
@@ -182,4 +197,3 @@ class CubicGB(Layer):
     def backward(self, dY):
         # this gradient is intentionally incorrect.
         return dY
-

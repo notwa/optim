@@ -3,7 +3,8 @@ import numpy as np
 
 from .float import *
 
-class Ritual: # i'm just making up names at this point.
+
+class Ritual:  # i'm just making up names at this point.
     def __init__(self, learner=None):
         self.learner = learner if learner is not None else Learner(Optimizer())
         self.model = None
@@ -77,7 +78,8 @@ class Ritual: # i'm just making up names at this point.
 
         if shuffle:
             if gen:
-                raise Exception("shuffling is incompatibile with using a generator.")
+                raise Exception(
+                    "shuffling is incompatibile with using a generator.")
             indices = np.arange(inputs.shape[0])
             np.random.shuffle(indices)
             inputs = inputs[indices]
@@ -90,7 +92,7 @@ class Ritual: # i'm just making up names at this point.
             batch_count = inputs.shape[0] // batch_size
             # TODO: lift this restriction
             assert inputs.shape[0] % batch_size == 0, \
-              "inputs is not evenly divisible by batch_size"
+                "inputs is not evenly divisible by batch_size"
 
         prev_batch_size = None
         for b in range(batch_count):
@@ -101,17 +103,20 @@ class Ritual: # i'm just making up names at this point.
                 batch_inputs, batch_outputs = next(generator)
                 batch_size = batch_inputs.shape[0]
                 # TODO: lift this restriction
-                assert batch_size == prev_batch_size or prev_batch_size is None, \
-                  "non-constant batch size (got {}, expected {})".format(batch_size, prev_batch_size)
+                fmt = "non-constant batch size (got {}, expected {})"
+                assert (batch_size == prev_batch_size
+                        or prev_batch_size is None), \
+                    fmt.format(batch_size, prev_batch_size)
             else:
                 bi = b * batch_size
-                batch_inputs  = inputs[ bi:bi+batch_size]
+                batch_inputs = inputs[bi:bi+batch_size]
                 batch_outputs = outputs[bi:bi+batch_size]
 
             if clear_grad:
                 self.model.clear_grad()
             self._train_batch(batch_inputs, batch_outputs, b, batch_count,
-                              test_only, return_losses=='both', return_losses)
+                              test_only, return_losses == 'both',
+                              return_losses)
 
             prev_batch_size = batch_size
 

@@ -4,26 +4,29 @@ from collections import defaultdict, OrderedDict
 
 from .weight import *
 
+
 # used for numbering layers like Keras:
 _layer_counters = defaultdict(lambda: 0)
 
+
 class LayerIncompatibility(Exception):
     pass
+
 
 class Layer:
     def __init__(self):
         self.parents = []
         self.children = []
         self.weights = OrderedDict()
-        self.loss = None # for activity regularizers
+        self.loss = None  # for activity regularizers
         self.input_shape = None
         self.output_shape = None
         kind = self.__class__.__name__
         global _layer_counters
         _layer_counters[kind] += 1
         self.name = "{}_{}".format(kind, _layer_counters[kind])
-        self.unsafe = False # disables assertions for better performance
-        self.shared = False # as in weight sharing
+        self.unsafe = False  # disables assertions for better performance
+        self.shared = False  # as in weight sharing
 
     def __str__(self):
         return self.name
@@ -40,9 +43,9 @@ class Layer:
         raise NotImplementedError("unimplemented", self)
 
     def make_shape(self, parent):
-        if self.input_shape == None:
+        if self.input_shape is None:
             self.input_shape = parent.output_shape
-        if self.output_shape == None:
+        if self.output_shape is None:
             self.output_shape = self.input_shape
 
     def do_feed(self, child):
@@ -75,16 +78,19 @@ class Layer:
         child.make_shape(self)
         if not child.is_compatible(self):
             fmt = "{} is incompatible with {}: shape mismatch: {} vs. {}"
-            raise LayerIncompatibility(fmt.format(self, child, self.output_shape, child.input_shape))
+            raise LayerIncompatibility(fmt.format(
+                self, child, self.output_shape, child.input_shape))
         self.do_feed(child)
         child.be_fed(self)
         return child
 
     def validate_input(self, X):
-        assert X.shape[1:] == self.input_shape,  (str(self), X.shape[1:], self.input_shape)
+        assert X.shape[1:] == self.input_shape, \
+            (str(self), X.shape[1:], self.input_shape)
 
     def validate_output(self, Y):
-        assert Y.shape[1:] == self.output_shape, (str(self), Y.shape[1:], self.output_shape)
+        assert Y.shape[1:] == self.output_shape, \
+            (str(self), Y.shape[1:], self.output_shape)
 
     def _new_weights(self, name, **kwargs):
         w = Weights(**kwargs)
@@ -93,9 +99,10 @@ class Layer:
         return w
 
     def share(self, node):
-        self.weights = node.weights # TODO: this should be all it takes.
+        self.weights = node.weights  # TODO: this should be all it takes.
         for k, v in self.weights.items():
-            vs = getattr(node, k) # hack: key isn't necessarily attribute name!
+            # hack: key isn't necessarily attribute name!
+            vs = getattr(node, k)
             setattr(self, k, vs)
         self.shared = True
 

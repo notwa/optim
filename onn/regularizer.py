@@ -2,8 +2,10 @@ import numpy as np
 
 from .float import *
 
+
 class Regularizer:
     pass
+
 
 class L1L2(Regularizer):
     def __init__(self, l1=0.0, l2=0.0):
@@ -25,6 +27,7 @@ class L1L2(Regularizer):
         if self.l2:
             df += self.l2 * 2 * X
         return df
+
 
 # more
 

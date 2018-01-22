@@ -4,6 +4,7 @@ from .float import *
 from .layer_base import *
 from .initialization import *
 
+
 class Bias(Layer):
     # TODO: support axes other than -1 and shapes other than 1D.
 
@@ -28,6 +29,7 @@ class Bias(Layer):
         self.biases.g += dY.sum(0)
         return dY
 
+
 class Dense(Layer):
     serialized = {
         'W': 'coeffs',
@@ -38,8 +40,10 @@ class Dense(Layer):
         super().__init__()
         self.dim = int(dim)
         self.output_shape = (dim,)
-        self.coeffs = self._new_weights('coeffs', init=init, regularizer=reg_w)
-        self.biases = self._new_weights('biases', init=init_zeros, regularizer=reg_b)
+        self.coeffs = self._new_weights('coeffs', init=init,
+                                        regularizer=reg_w)
+        self.biases = self._new_weights('biases', init=init_zeros,
+                                        regularizer=reg_b)
 
     def make_shape(self, parent):
         shape = parent.output_shape
@@ -101,18 +105,20 @@ class Conv1Dper(Layer):
 
     def forward(self, X):
         if self.wrap0 == 0:
-            Xper = np.hstack((X,X[:,:self.wrap1]))
+            Xper = np.hstack((X, X[:, :self.wrap1]))
         elif self.wrap1 == 0:
-            Xper = np.hstack((X[:,-self.wrap0:],X))
+            Xper = np.hstack((X[:, -self.wrap0:], X))
         else:
-            Xper = np.hstack((X[:,-self.wrap0:],X,X[:,:self.wrap1]))
+            Xper = np.hstack((X[:, -self.wrap0:], X, X[:, :self.wrap1]))
         self.cols = rolling_batch(Xper, self.kernel_size)
-        convolved = (self.cols * self.coeffs.f[:,::-1]).sum(2)
+        convolved = (self.cols * self.coeffs.f[:, ::-1]).sum(2)
         return convolved
 
     def backward(self, dY):
-        self.coeffs.g += (dY[:,:,None] * self.cols).sum(0)[:,::-1].sum(0, keepdims=True)
-        return (dY[:,:,None] * self.coeffs.f[:,::-1]).sum(2)
+        self.coeffs.g += (dY[:, :, None] * self.cols).sum(0)[:, ::-1].sum(
+            0, keepdims=True)
+        return (dY[:, :, None] * self.coeffs.f[:, ::-1]).sum(2)
+
 
 class LayerNorm(Layer):
     # paper: https://arxiv.org/abs/1607.06450
@@ -168,7 +174,8 @@ class LayerNorm(Layer):
 
         return dX
 
-class Denses(Layer): # TODO: rename?
+
+class Denses(Layer):  # TODO: rename?
     # acts as a separate Dense for each row or column. only for 2D arrays.
 
     serialized = {
@@ -176,13 +183,16 @@ class Denses(Layer): # TODO: rename?
         'b': 'biases',
     }
 
-    def __init__(self, dim, init=init_he_uniform, reg_w=None, reg_b=None, axis=-1):
+    def __init__(self, dim, init=init_he_uniform,
+                 reg_w=None, reg_b=None, axis=-1):
         super().__init__()
         self.dim = int(dim)
         self.weight_init = init
         self.axis = int(axis)
-        self.coeffs = self._new_weights('coeffs', init=init, regularizer=reg_w)
-        self.biases = self._new_weights('biases', init=init_zeros, regularizer=reg_b)
+        self.coeffs = self._new_weights('coeffs', init=init,
+                                        regularizer=reg_w)
+        self.biases = self._new_weights('biases', init=init_zeros,
+                                        regularizer=reg_b)
 
     def make_shape(self, parent):
         shape = parent.output_shape
@@ -220,9 +230,11 @@ class Denses(Layer): # TODO: rename?
             self.coeffs.g += np.einsum('ijx,ijk->jxk', self.X, dY)
             return np.einsum('ijk,jxk->ijx', dY, self.coeffs.f)
 
+
 class CosineDense(Dense):
     # paper: https://arxiv.org/abs/1702.05870
-    # another implementation: https://github.com/farizrahman4u/keras-contrib/pull/36
+    # another implementation:
+    # https://github.com/farizrahman4u/keras-contrib/pull/36
     # the paper doesn't mention bias,
     # so we treat bias as an additional weight with a constant input of 1.
     # this is correct in Dense layers, so i hope it's correct here too.
@@ -231,24 +243,25 @@ class CosineDense(Dense):
 
     def forward(self, X):
         self.X = X
-        self.X_norm = np.sqrt(np.square(X).sum(-1, keepdims=True) \
-          + 1 + self.eps)
-        self.W_norm = np.sqrt(np.square(self.coeffs.f).sum(0, keepdims=True) \
-          + np.square(self.biases.f) + self.eps)
+        self.X_norm = np.sqrt(np.square(X).sum(-1, keepdims=True)
+                              + 1 + self.eps)
+        self.W_norm = np.sqrt(np.square(self.coeffs.f).sum(0, keepdims=True)
+                              + np.square(self.biases.f) + self.eps)
         self.dot = X @ self.coeffs.f + self.biases.f
         Y = self.dot / (self.X_norm * self.W_norm)
         return Y
 
     def backward(self, dY):
         ddot = dY / self.X_norm / self.W_norm
-        dX_norm = -(dY * self.dot / self.W_norm).sum(-1, keepdims=True) / self.X_norm**2
-        dW_norm = -(dY * self.dot / self.X_norm).sum( 0, keepdims=True) / self.W_norm**2
+        dX_norm = -(dY * self.dot / self.W_norm).sum(-1, keepdims=True) \
+            / self.X_norm**2
+        dW_norm = -(dY * self.dot / self.X_norm).sum(0, keepdims=True) \
+            / self.W_norm**2
 
-        self.coeffs.g += self.X.T @ ddot            \
-          + dW_norm / self.W_norm * self.coeffs.f
+        self.coeffs.g += self.X.T @ ddot \
+            + dW_norm / self.W_norm * self.coeffs.f
         self.biases.g += ddot.sum(0, keepdims=True) \
-          + dW_norm / self.W_norm * self.biases.f
+            + dW_norm / self.W_norm * self.biases.f
         dX = ddot @ self.coeffs.f.T + dX_norm / self.X_norm * self.X
 
         return dX
-

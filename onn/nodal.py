@@ -3,7 +3,8 @@ class DummyNode:
 
     def __init__(self, children=None, parents=None):
         self.children = children if children is not None else []
-        self.parents  = parents  if parents  is not None else []
+        self.parents = parents if parents is not None else []
+
 
 def traverse(node_in, node_out, nodes=None, dummy_mode=False):
     # i have no idea if this is any algorithm in particular.
@@ -27,7 +28,7 @@ def traverse(node_in, node_out, nodes=None, dummy_mode=False):
         if not seen_up[node]:
             continue
         parents_added = (parent in nodes for parent in node.parents)
-        if not node in nodes and all(parents_added):
+        if node not in nodes and all(parents_added):
             nodes.append(node)
         for child in node.children:
             q.append(child)
@@ -36,6 +37,7 @@ def traverse(node_in, node_out, nodes=None, dummy_mode=False):
         nodes.remove(node_in)
 
     return nodes
+
 
 def traverse_all(nodes_in, nodes_out, nodes=None):
     all_in = DummyNode(children=nodes_in)

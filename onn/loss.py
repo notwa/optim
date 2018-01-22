@@ -2,6 +2,7 @@ import numpy as np
 
 from .float import *
 
+
 class Loss:
     def forward(self, p, y):
         raise NotImplementedError("unimplemented", self)
@@ -9,13 +10,15 @@ class Loss:
     def backward(self, p, y):
         raise NotImplementedError("unimplemented", self)
 
-class NLL(Loss): # Negative Log Likelihood
+
+class NLL(Loss):  # Negative Log Likelihood
     def forward(self, p, y):
         correct = p * y
         return np.mean(-correct)
 
     def backward(self, p, y):
         return -y / len(p)
+
 
 class CategoricalCrossentropy(Loss):
     # lifted from theano
@@ -33,6 +36,7 @@ class CategoricalCrossentropy(Loss):
         df = (p - y) / (p * (1 - p))
         return df / len(y)
 
+
 class Accuracy(Loss):
     # returns percentage of categories correctly predicted.
     # utilizes argmax(), so it cannot be used for gradient descent.
@@ -45,6 +49,7 @@ class Accuracy(Loss):
     def backward(self, p, y):
         raise NotImplementedError("cannot take the gradient of Accuracy")
 
+
 class ResidualLoss(Loss):
     def forward(self, p, y):
         return np.mean(self.f(p - y))
@@ -53,12 +58,14 @@ class ResidualLoss(Loss):
         ret = self.df(p - y) / len(y)
         return ret
 
+
 class SquaredHalved(ResidualLoss):
     def f(self, r):
         return np.square(r) / 2
 
     def df(self, r):
         return r
+
 
 class Squared(ResidualLoss):
     def f(self, r):
@@ -67,12 +74,14 @@ class Squared(ResidualLoss):
     def df(self, r):
         return 2 * r
 
+
 class Absolute(ResidualLoss):
     def f(self, r):
         return np.abs(r)
 
     def df(self, r):
         return np.sign(r)
+
 
 class Huber(ResidualLoss):
     def __init__(self, delta=1.0):
@@ -87,6 +96,7 @@ class Huber(ResidualLoss):
         return np.where(r <= self.delta,
                         r,
                         self.delta * np.sign(r))
+
 
 # more
 
@@ -104,6 +114,7 @@ class SomethingElse(ResidualLoss):
 
     def df(self, r):
         return np.sign(r) * np.abs(r)**self.c
+
 
 class Confidence(Loss):
     # this isn't "confidence" in any meaningful way; (e.g. Bayesian)
@@ -126,4 +137,3 @@ class Confidence(Loss):
         detc = p / categories / (1 - 1/categories)
         dmax = p == np.max(p, axis=-1, keepdims=True)
         return detc * dmax
-

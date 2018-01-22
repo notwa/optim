@@ -2,6 +2,7 @@ from .layer_base import *
 from .initialization import *
 from .float import *
 
+
 # Nonparametric Layers {{{1
 
 class Input(Layer):
@@ -16,8 +17,9 @@ class Input(Layer):
         return X
 
     def backward(self, dY):
-        #self.dY = dY
+        # self.dY = dY
         return np.zeros_like(dY)
+
 
 class Reshape(Layer):
     def __init__(self, new_shape):
@@ -33,6 +35,7 @@ class Reshape(Layer):
         assert dY.shape[0] == self.batch_size
         return dY.reshape(self.batch_size, *self.input_shape)
 
+
 class Flatten(Layer):
     def make_shape(self, parent):
         shape = parent.output_shape
@@ -47,6 +50,7 @@ class Flatten(Layer):
         assert dY.shape[0] == self.batch_size
         return dY.reshape(self.batch_size, *self.input_shape)
 
+
 class ConstAffine(Layer):
     def __init__(self, a=1, b=0):
         super().__init__()
@@ -59,13 +63,15 @@ class ConstAffine(Layer):
     def backward(self, dY):
         return dY * self.a
 
+
 class Sum(Layer):
     def _propagate(self, edges, deterministic):
         return np.sum(edges, axis=0)
 
     def _backpropagate(self, edges):
-        #assert len(edges) == 1, "unimplemented"
-        return edges[0] # TODO: does this always work?
+        # assert len(edges) == 1, "unimplemented"
+        return edges[0]  # TODO: does this always work?
+
 
 class ActivityRegularizer(Layer):
     def __init__(self, reg):
@@ -81,6 +87,7 @@ class ActivityRegularizer(Layer):
     def backward(self, dY):
         return dY + self.reg.backward(self.X)
 
+
 class Dropout(Layer):
     def __init__(self, dropout=0.0):
         super().__init__()
@@ -92,11 +99,12 @@ class Dropout(Layer):
         return X * self.mask
 
     def forward_deterministic(self, X):
-        #self.mask = _1
+        # self.mask = _1
         return X
 
     def backward(self, dY):
         return dY * self.mask
+
 
 # more
 
@@ -136,6 +144,7 @@ class AlphaDropout(Layer):
     def backward(self, dY):
         return dY * self.a * self.mask
 
+
 class Decimate(Layer):
     # simple decimaton layer that drops every other sample from the last axis.
 
@@ -167,6 +176,7 @@ class Decimate(Layer):
         elif self.phase == 'odd':
             dX.ravel()[1::2] = dY.ravel()
         return dX
+
 
 class Undecimate(Layer):
     # inverse operation of Decimate. not quite interpolation.

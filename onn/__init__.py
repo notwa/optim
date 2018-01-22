@@ -1,5 +1,5 @@
 # external packages required for full functionality:
-# numpy scipy h5py sklearn dotmap
+# numpy scipy h5py sklearn
 
 # BIG TODO: ensure numpy isn't upcasting to float64 *anywhere*.
 #           this is gonna take some work.

@@ -1,11 +1,12 @@
 import numpy as np
 
+
 class Weights:
     # we may or may not contain weights -- or any information, for that matter.
 
     def __init__(self, **kwargs):
-        self.f = None # forward weights
-        self.g = None # backward weights (gradients)
+        self.f = None  # forward weights
+        self.g = None  # backward weights (gradients)
         self.shape = None
         self.init = None
         self.allocator = None
@@ -16,7 +17,7 @@ class Weights:
 
     def configure(self, **kwargs):
         for k, v in kwargs.items():
-            getattr(self, k) # ensures the key already exists
+            getattr(self, k)  # ensures the key already exists
             setattr(self, k, v)
 
     @property
