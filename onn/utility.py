@@ -28,6 +28,14 @@ def lower_priority():
         os.nice(1)
 
 
+def onehot(y):
+    unique = np.unique(y)
+    Y = np.zeros((y.shape[0], len(unique)), dtype=np.int8)
+    offsets = np.arange(len(y)) * len(unique)
+    Y.flat[offsets + y.flat] = 1
+    return Y
+
+
 # more
 
 _log_was_update = False
