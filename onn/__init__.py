@@ -5,7 +5,6 @@
 #           this is gonna take some work.
 
 from .activation import *
-from .float import *
 from .initialization import *
 from .layer import *
 from .learner import *

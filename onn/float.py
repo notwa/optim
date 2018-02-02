@@ -17,4 +17,4 @@ _sqrt2 = _f(np.sqrt(2))
 _invsqrt2 = _f(1/np.sqrt(2))
 _pi = _f(np.pi)
 
-__all__ = [o for o in locals()]
+__all__ = [o for o in locals() if type(o) != 'module']
