@@ -96,3 +96,66 @@ class L1L2avg(Regularizer):
         if self.l2:
             df += self.l2 / len(X) * 2 * X
         return df
+
+
+class NoiseInjector(Layer):
+    def __init__(self, scale=1.0, uniform=False, absolute=False,
+                 forwards=True, backwards=False):
+        self.scale = _f(scale)
+        self.uniform = bool(uniform)
+        self.absolute = bool(absolute)
+        self.forwards = bool(forwards)
+        self.backwards = bool(backwards)
+
+        super().__init__()
+
+    def forward(self, X):
+        s = self.scale
+        if self.uniform:
+            self.noise = np.random.uniform(-s, s, size=X.shape)
+        else:
+            self.noise = np.random.normal(0, s, size=X.shape)
+        if not self.forwards:
+            return X
+        if self.absolute:
+            return X + np.abs(self.noise)
+        else:
+            return X + self.noise
+
+    def forward_deterministic(self, X):
+        return X
+
+    def backward(self, dY):
+        if not self.backwards:
+            return dY
+        if self.absolute:
+            return dY + np.abs(self.noise)
+        else:
+            return dY + self.noise
+
+
+class NoiseMultiplier(Layer):
+    def __init__(self, scale=1.0, uniform=False,
+                 forwards=True, backwards=True):
+        self.scale = _f(scale)
+        self.uniform = bool(uniform)
+
+        super().__init__()
+
+    def forward(self, X):
+        s = self.scale
+        if self.uniform:
+            self.noise = np.exp(np.random.uniform(-s, s, size=X.shape))
+        else:
+            self.noise = np.exp(np.random.normal(0, s, size=X.shape))
+        if not self.forwards:
+            return X
+        return X * self.noise
+
+    def forward_deterministic(self, X):
+        return X
+
+    def backward(self, dY):
+        if not self.backwards:
+            return dY
+        return dY * self.noise
