@@ -159,3 +159,24 @@ class NoiseMultiplier(Layer):
         if not self.backwards:
             return dY
         return dY * self.noise
+
+
+class LookupLearner(Learner):
+    per_batch = True
+
+    def __init__(self, optim, epochs=1, rates=(1,), lerp=False):
+        self.rates = tuple(rates)
+        self.lerp = bool(lerp)
+        self.per_batch = self.lerp
+        super().__init__(optim, epochs, rates[0])
+
+    def rate_at(self, epoch):
+        if self.lerp:
+            ind = min(max(int(epoch), 1), len(self.rates) - 1)
+            t = _f(epoch % 1)
+            a = _f(self.rates[ind-1])
+            b = _f(self.rates[ind])
+            return (_1 - t) * a + t * b
+        else:
+            ind = min(int(epoch), len(self.rates) - 1)
+            return _f(self.rates[ind])
