@@ -74,3 +74,25 @@ class PowerSignClip(Optimizer):
         inter /= np.log(1 + np.exp(total_norm / self.clip - 1)) + 1
 
         return -self.lr * inter
+
+
+class L1L2avg(Regularizer):
+    def __init__(self, l1=0.0, l2=0.0):
+        self.l1 = _f(l1)
+        self.l2 = _f(l2)
+
+    def forward(self, X):
+        f = _0
+        if self.l1:
+            f += np.average(self.l1 * np.abs(X))
+        if self.l2:
+            f += np.average(self.l2 * np.square(X))
+        return f
+
+    def backward(self, X):
+        df = np.zeros_like(X)
+        if self.l1:
+            df += self.l1 / len(X) * np.sign(X)
+        if self.l2:
+            df += self.l2 / len(X) * 2 * X
+        return df
