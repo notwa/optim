@@ -197,3 +197,12 @@ class CubicGB(Layer):
     def backward(self, dY):
         # this gradient is intentionally incorrect.
         return dY
+
+
+class Arcsinh(Layer):
+    def forward(self, X):
+        self.X = X
+        return np.arcsinh(X)
+
+    def backward(self, dY):
+        return dY / np.sqrt(self.X * self.X + 1)
