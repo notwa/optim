@@ -550,3 +550,51 @@ class Neumann(Optimizer):
         # weights and accumulator:
         W += mu * self.mt - self.lr * dt
         self.vt = W + self.gamma * (self.vt - W)
+
+
+class AMSgrad(Optimizer):
+    # paper: https://openreview.net/forum?id=ryQu7f-RZ
+    # based on Adam. this simply adds a running element-wise maximum to vt.
+
+    def __init__(self, lr=0.002, b1=0.9, b2=0.999, eps=1e-8, debias=True):
+        self.b1 = _f(b1)  # decay term
+        self.b2 = _f(b2)  # decay term
+        self.b1_t_default = _f(b1)  # decay term power t
+        self.b2_t_default = _f(b2)  # decay term power t
+        self.eps = _f(eps)
+        self.debias = bool(debias)
+
+        super().__init__(lr)
+
+    def reset(self):
+        self.mt = None
+        self.vt = None
+        self.vtmax = None
+        self.b1_t = self.b1_t_default
+        self.b2_t = self.b2_t_default
+
+    def compute(self, dW, W):
+        if self.mt is None:
+            self.mt = np.zeros_like(dW)
+        if self.vt is None:
+            self.vt = np.zeros_like(dW)
+        if self.vtmax is None:
+            self.vtmax = np.zeros_like(dW)
+
+        # filter
+        self.mt += (1 - self.b1) * (dW - self.mt)
+        self.vt += (1 - self.b2) * (np.square(dW) - self.vt)
+
+        self.vtmax = np.maximum(self.vtmax, self.vt)
+
+        if self.debias:
+            ret = -self.lr * (self.mt / (1 - self.b1_t)) \
+                / (np.sqrt(self.vtmax / (1 - self.b2_t)) + self.eps)
+        else:
+            ret = -self.lr * self.mt / (np.sqrt(self.vtmax) + self.eps)
+
+        # decay gain
+        self.b1_t *= self.b1
+        self.b2_t *= self.b2
+
+        return ret
