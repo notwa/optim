@@ -206,3 +206,17 @@ class Arcsinh(Layer):
 
     def backward(self, dY):
         return dY / np.sqrt(self.X * self.X + 1)
+
+
+class HardClip(Layer):  # aka HardTanh when at default settings
+    def __init__(self, lower=-1.0, upper=1.0):
+        super().__init__()
+        self.lower = _f(lower)
+        self.upper = _f(upper)
+
+    def forward(self, X):
+        self.X = X
+        return np.clip(X, self.lower, self.upper)
+
+    def backward(self, dY):
+        return dY * ((self.X <= self.lower) & (self.X >= self.upper))
