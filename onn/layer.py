@@ -6,19 +6,22 @@ from .float import *
 # Nonparametric Layers {{{1
 
 class Input(Layer):
-    def __init__(self, shape):
+    def __init__(self, shape, gradient=False):
         assert shape is not None
         super().__init__()
         self.shape = tuple(shape)
         self.input_shape = self.shape
         self.output_shape = self.shape
+        self.gradient = bool(gradient)
 
     def forward(self, X):
         return X
 
     def backward(self, dY):
-        # self.dY = dY
-        return np.zeros_like(dY)
+        if self.gradient:
+            return dY
+        else:
+            return np.zeros_like(dY)
 
 
 class Reshape(Layer):
