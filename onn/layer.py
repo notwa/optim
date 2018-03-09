@@ -1,6 +1,7 @@
 from .layer_base import *
 from .initialization import *
 from .float import *
+from .regularizer import Regularizer
 
 
 # Nonparametric Layers {{{1
