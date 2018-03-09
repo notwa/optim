@@ -1,5 +1,5 @@
 # external packages required for full functionality:
-# numpy scipy h5py sklearn
+# numpy scipy h5py
 
 # BIG TODO: ensure numpy isn't upcasting to float64 *anywhere*.
 #           this is gonna take some work.

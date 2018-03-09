@@ -29,7 +29,11 @@ maybe consider one of the following:
 
 python 3.5+
 
-numpy scipy h5py sklearn dotmap
+mandatory packages: numpy scipy
+
+needed for saving weights: h5py
+
+used in example code: dotmap
 
 ## minimal example
 
