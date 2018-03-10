@@ -219,4 +219,4 @@ class HardClip(Layer):  # aka HardTanh when at default settings
         return np.clip(X, self.lower, self.upper)
 
     def backward(self, dY):
-        return dY * ((self.X <= self.lower) & (self.X >= self.upper))
+        return dY * ((self.X >= self.lower) & (self.X <= self.upper))
