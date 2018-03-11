@@ -7,7 +7,11 @@ from .float import *
 from .layer_base import *
 
 
-class Identity(Layer):
+class Activation(Layer):
+    pass
+
+
+class Identity(Activation):
     def forward(self, X):
         return X
 
@@ -15,7 +19,7 @@ class Identity(Layer):
         return dY
 
 
-class Sigmoid(Layer):  # aka Logistic, Expit (inverse of Logit)
+class Sigmoid(Activation):  # aka Logistic, Expit (inverse of Logit)
     def forward(self, X):
         self.sig = sigmoid(X)
         return self.sig
@@ -24,7 +28,7 @@ class Sigmoid(Layer):  # aka Logistic, Expit (inverse of Logit)
         return dY * self.sig * (1 - self.sig)
 
 
-class Softplus(Layer):
+class Softplus(Activation):
     # integral of Sigmoid.
 
     def forward(self, X):
@@ -35,7 +39,7 @@ class Softplus(Layer):
         return dY * sigmoid(self.X)
 
 
-class Tanh(Layer):
+class Tanh(Activation):
     def forward(self, X):
         self.sig = np.tanh(X)
         return self.sig
@@ -44,7 +48,7 @@ class Tanh(Layer):
         return dY * (1 - self.sig * self.sig)
 
 
-class LeCunTanh(Layer):
+class LeCunTanh(Activation):
     # paper: http://yann.lecun.com/exdb/publis/pdf/lecun-98b.pdf
     # paper: http://yann.lecun.com/exdb/publis/pdf/lecun-89.pdf
     # scaled such that f([-1, 1]) = [-1, 1].
@@ -59,7 +63,7 @@ class LeCunTanh(Layer):
         return dY * (2 / 3 * 1.7159) * (1 - self.sig * self.sig)
 
 
-class Relu(Layer):
+class Relu(Activation):
     def forward(self, X):
         self.cond = X >= 0
         return np.where(self.cond, X, 0)
@@ -68,7 +72,7 @@ class Relu(Layer):
         return np.where(self.cond, dY, 0)
 
 
-class Elu(Layer):
+class Elu(Activation):
     # paper: https://arxiv.org/abs/1511.07289
 
     def __init__(self, alpha=1):
@@ -84,7 +88,7 @@ class Elu(Layer):
         return dY * np.where(self.cond, 1, self.neg + 1)
 
 
-class Swish(Layer):
+class Swish(Activation):
     # paper: https://arxiv.org/abs/1710.05941
     # the beta parameter here is constant instead of trainable.
     # note that Swish generalizes both SiLU and an approximation of GELU.
@@ -107,7 +111,7 @@ class Silu(Swish):
         self.scale = _1
 
 
-class GeluApprox(Layer):
+class GeluApprox(Activation):
     # paper: https://arxiv.org/abs/1606.08415
     #  plot: https://www.desmos.com/calculator/ydzgtccsld
 
@@ -115,7 +119,7 @@ class GeluApprox(Layer):
         self.scale = _f(1.704)
 
 
-class Softmax(Layer):
+class Softmax(Activation):
     def forward(self, X):
         alpha = np.max(X, axis=-1, keepdims=True)
         num = np.exp(X - alpha)
@@ -139,7 +143,7 @@ class LogSoftmax(Softmax):
         return dY - np.sum(dY, axis=-1, keepdims=True) * self.sm
 
 
-class Cos(Layer):
+class Cos(Activation):
     # performs well on MNIST for some strange reason.
 
     def forward(self, X):
@@ -150,7 +154,7 @@ class Cos(Layer):
         return dY * -np.sin(self.X)
 
 
-class Selu(Layer):
+class Selu(Activation):
     # paper: https://arxiv.org/abs/1706.02515
 
     def __init__(self, alpha=1.67326324, lamb=1.05070099):
@@ -169,7 +173,7 @@ class Selu(Layer):
 
 # more
 
-class TanhTest(Layer):
+class TanhTest(Activation):
     def forward(self, X):
         self.sig = np.tanh(1 / 2 * X)
         return 2.4004 * self.sig
@@ -178,7 +182,7 @@ class TanhTest(Layer):
         return dY * (1 / 2 * 2.4004) * (1 - self.sig * self.sig)
 
 
-class ExpGB(Layer):
+class ExpGB(Activation):
     # an output layer for one-hot classification problems.
     # use with MSE (SquaredHalved), not CategoricalCrossentropy!
     # paper: https://arxiv.org/abs/1707.04199
@@ -196,7 +200,7 @@ class ExpGB(Layer):
         return dY
 
 
-class CubicGB(Layer):
+class CubicGB(Activation):
     # an output layer for one-hot classification problems.
     # use with MSE (SquaredHalved), not CategoricalCrossentropy!
     # paper: https://arxiv.org/abs/1707.04199
@@ -217,7 +221,7 @@ class CubicGB(Layer):
         return dY
 
 
-class Arcsinh(Layer):
+class Arcsinh(Activation):
     def forward(self, X):
         self.X = X
         return np.arcsinh(X)
@@ -226,7 +230,7 @@ class Arcsinh(Layer):
         return dY / np.sqrt(self.X * self.X + 1)
 
 
-class HardClip(Layer):  # aka HardTanh when at default settings
+class HardClip(Activation):  # aka HardTanh when at default settings
     def __init__(self, lower=-1.0, upper=1.0):
         super().__init__()
         self.lower = _f(lower)
