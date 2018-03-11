@@ -84,17 +84,35 @@ class Elu(Layer):
         return dY * np.where(self.cond, 1, self.neg + 1)
 
 
-class GeluApprox(Layer):
-    # paper: https://arxiv.org/abs/1606.08415
-    #  plot: https://www.desmos.com/calculator/ydzgtccsld
+class Swish(Layer):
+    # paper: https://arxiv.org/abs/1710.05941
+    # the beta parameter here is constant instead of trainable.
+    # note that Swish generalizes both SiLU and an approximation of GELU.
+
+    def __init__(self, scale=1.0):
+        self.scale = _f(scale)
 
     def forward(self, X):
-        self.a = 1.704 * X
+        self.a = self.scale * X
         self.sig = sigmoid(self.a)
         return X * self.sig
 
     def backward(self, dY):
         return dY * self.sig * (1 + self.a * (1 - self.sig))
+
+
+class Silu(Swish):
+    # paper: https://arxiv.org/abs/1702.03118
+    def __init__(self):
+        self.scale = _1
+
+
+class GeluApprox(Layer):
+    # paper: https://arxiv.org/abs/1606.08415
+    #  plot: https://www.desmos.com/calculator/ydzgtccsld
+
+    def __init__(self):
+        self.scale = _f(1.704)
 
 
 class Softmax(Layer):
