@@ -22,6 +22,5 @@ from .weight import *
 # this is similar to default behaviour of having no __all__ variable at all,
 # but ours ignores modules as well. this allows for `import sys` and such
 # without clobbering `from our_module import *`.
-__all__ = [
-    o for o in locals()
-    if type(o) != 'module' and not o.startswith('_')]
+__all__ = [k for k, v in locals().items()
+           if not __import__('inspect').ismodule(v) and not k.startswith('_')]

@@ -1,3 +1,5 @@
+import numpy as np
+
 from .float import *
 from .layer import Layer
 from .loss import Loss
