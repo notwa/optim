@@ -1,10 +1,26 @@
 import numpy as np
 
+from .layer import Layer
 from .float import *
 
 
 class Regularizer:
     pass
+
+
+class ActivityRegularizer(Layer):
+    def __init__(self, reg):
+        super().__init__()
+        assert isinstance(reg, Regularizer), reg
+        self.reg = reg
+
+    def forward(self, X):
+        self.X = X
+        self.loss = np.sum(self.reg.forward(X))
+        return X
+
+    def backward(self, dY):
+        return dY + self.reg.backward(self.X)
 
 
 class L1L2(Regularizer):

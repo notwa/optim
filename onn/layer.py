@@ -1,7 +1,6 @@
 from .layer_base import *
 from .initialization import *
 from .float import *
-from .regularizer import Regularizer
 
 
 # Nonparametric Layers {{{1
@@ -75,21 +74,6 @@ class Sum(Layer):
     def _backpropagate(self, edges):
         # assert len(edges) == 1, "unimplemented"
         return edges[0]  # TODO: does this always work?
-
-
-class ActivityRegularizer(Layer):
-    def __init__(self, reg):
-        super().__init__()
-        assert isinstance(reg, Regularizer), reg
-        self.reg = reg
-
-    def forward(self, X):
-        self.X = X
-        self.loss = np.sum(self.reg.forward(X))
-        return X
-
-    def backward(self, dY):
-        return dY + self.reg.backward(self.X)
 
 
 class Dropout(Layer):
