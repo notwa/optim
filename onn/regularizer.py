@@ -1,7 +1,7 @@
 import numpy as np
 
+from .float import _f, _0
 from .layer import Layer
-from .float import *
 
 
 class Regularizer:

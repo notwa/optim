@@ -1,6 +1,6 @@
 import numpy as np
 
-from .float import *
+from .float import _f
 from .layer_base import *
 from .initialization import *
 

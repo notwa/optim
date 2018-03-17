@@ -1,6 +1,6 @@
 from .layer_base import *
 from .initialization import *
-from .float import *
+from .float import _f, _1
 
 
 # Nonparametric Layers {{{1

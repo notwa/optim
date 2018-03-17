@@ -1,6 +1,6 @@
 import numpy as np
 
-from .float import *
+from .float import _f, _0, _1
 from .layer import Layer
 from .loss import Loss
 from .optimizer import Optimizer
