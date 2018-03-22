@@ -3,7 +3,10 @@ import numpy as np
 # just for speed, not strictly essential:
 from scipy.special import expit as sigmoid
 
-from .float import _f, _1
+# needed for GELU:
+from scipy.special import erf
+
+from .float import _f, _1, _inv2, _invsqrt2, _invsqrt2pi
 from .layer_base import *
 
 
@@ -118,6 +121,17 @@ class GeluApprox(Swish):
 
     def __init__(self):
         super().__init__(_f(1.704))
+
+
+class Gelu(Activation):
+    def forward(self, X):
+        self.X = X
+        self.cdf = _inv2 * (_1 + erf(X * _invsqrt2))
+        return X * self.cdf
+
+    def backward(self, dY):
+        return dY * (self.cdf \
+            + np.exp(-_inv2 * np.square(self.X)) * self.X * _invsqrt2pi)
 
 
 class Softmax(Activation):
