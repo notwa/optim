@@ -31,7 +31,7 @@ class AddSignClip(Optimizer):
         self.accum[:] = self.accum * self.mu + dW
 
         signed = np.sign(dW) * np.sign(self.accum)
-        #signed *= decay
+        # signed *= decay
 
         inter = dW * (self.alpha + signed)
 
@@ -64,7 +64,7 @@ class PowerSignClip(Optimizer):
         self.accum[:] = self.accum * self.mu + dW
 
         signed = np.sign(dW) * np.sign(self.accum)
-        #signed *= decay
+        # signed *= decay
 
         if self.use_exp:
             inter = dW * np.exp(signed)

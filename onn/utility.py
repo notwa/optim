@@ -75,14 +75,14 @@ class Folding:
         class_n = np.max(classes) + 1
         sorted_inputs = np.array([inputs[classes == n]
                                   for n in range(class_n)], inputs.dtype)
-        sorted_outputs = np.arange(class_n
-            ).repeat(sorted_inputs.shape[1]).reshape(sorted_inputs.shape[:2])
+        sorted_outputs = np.arange(class_n) \
+            .repeat(sorted_inputs.shape[1]).reshape(sorted_inputs.shape[:2])
 
         # now to interleave the classes instead of having them grouped:
-        inputs = np.swapaxes(sorted_inputs, 0, 1
-            ).reshape(-1, *sorted_inputs.shape[2:])
-        outputs = np.swapaxes(sorted_outputs, 0, 1
-            ).reshape(-1, *sorted_outputs.shape[2:])
+        inputs = np.swapaxes(sorted_inputs, 0, 1) \
+            .reshape(-1, *sorted_inputs.shape[2:])
+        outputs = np.swapaxes(sorted_outputs, 0, 1) \
+            .reshape(-1, *sorted_outputs.shape[2:])
 
         # one final thing: we need to make our outputs one-hot again.
         self.inputs = inputs

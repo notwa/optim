@@ -130,8 +130,9 @@ class Gelu(Activation):
         return X * self.cdf
 
     def backward(self, dY):
-        return dY * (self.cdf \
-            + np.exp(-_inv2 * np.square(self.X)) * self.X * _invsqrt2pi)
+        return dY * (self.cdf
+                     + np.exp(-_inv2 * np.square(self.X))
+                     * self.X * _invsqrt2pi)
 
 
 class Softmax(Activation):
