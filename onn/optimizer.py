@@ -122,7 +122,7 @@ class RMSprop(Optimizer):
 
 class RMSpropCentered(Optimizer):
     # referenced TensorFlow/PyTorch.
-    # paper: https://arxiv.org/pdf/1308.0850v5.pdf
+    # paper: https://arxiv.org/abs/1308.0850v5
 
     def __init__(self, lr=1e-4, aleph=0.95, momentum=0.9, eps=1e-8):
         self.aleph = _f(aleph)
@@ -532,11 +532,11 @@ class PowerSign(Optimizer):
 
 class Neumann(Optimizer):
     # paper: https://arxiv.org/abs/1712.03298
-    # NOTE: this implementation is missing resetting as described in the paper.
+    # NOTE: this implementation omits resetting as described in the paper.
     #       resetting is totally disabled for now.
     # NOTE: this implementation does not use vanilla SGD for its first epochs.
-    #       you should do this yourself if you need it.
-    #       it seems like using a Learner like SineCLR makes this unnecessary.
+    #       you can do this yourself if you really want to.
+    #       it seems to be enough to use a slow-starting Learner like SineCLR.
 
     def __init__(self, lr=0.01):
         self.alpha = _f(1e-7)  # cubic.
