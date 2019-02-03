@@ -137,6 +137,8 @@ class Gelu(Activation):
 
 class Softmax(Activation):
     def forward(self, X):
+        # this alpha term is for numerical stability
+        # and is not strictly essential.
         alpha = np.max(X, axis=-1, keepdims=True)
         num = np.exp(X - alpha)
         den = np.sum(num, axis=-1, keepdims=True)
