@@ -62,6 +62,31 @@ class Adagrad(Optimizer):
         return -self.lr * dW / (np.sqrt(self.g) + self.eps)
 
 
+class Adadelta(Optimizer):
+    # paper: https://arxiv.org/abs/1212.5701
+
+    def __init__(self, lr=1.0, mu=0.95, eps=1e-8):
+        self.mu = _f(mu)
+        self.eps = _f(eps)
+
+        super().__init__(lr)
+
+    def reset(self):
+        self.g = None
+        self.x = None
+
+    def compute(self, dW, W):
+        if self.g is None:
+            self.g = np.zeros_like(dW)
+        if self.x is None:
+            self.x = np.zeros_like(dW)
+
+        self.g += (self.mu - 1) * (self.g - np.square(dW))
+        delta = dW * np.sqrt(self.x + self.eps) / (np.sqrt(self.g) + self.eps)
+        self.x += (self.mu - 1) * (self.x - np.square(delta))
+        return -self.lr * delta
+
+
 class RMSprop(Optimizer):
     # RMSprop generalizes* Adagrad, etc.
 
