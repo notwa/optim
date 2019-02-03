@@ -45,23 +45,6 @@ class Momentum(Optimizer):
         return V
 
 
-class Adagrad(Optimizer):
-    def __init__(self, lr=0.01, eps=1e-8):
-        self.eps = _f(eps)
-
-        super().__init__(lr)
-
-    def reset(self):
-        self.g = None
-
-    def compute(self, dW, W):
-        if self.g is None:
-            self.g = np.zeros_like(dW)
-
-        self.g += np.square(dW)
-        return -self.lr * dW / (np.sqrt(self.g) + self.eps)
-
-
 class Adadelta(Optimizer):
     # paper: https://arxiv.org/abs/1212.5701
 
@@ -85,39 +68,6 @@ class Adadelta(Optimizer):
         delta = dW * np.sqrt(self.x + self.eps) / (np.sqrt(self.g) + self.eps)
         self.x += (self.mu - 1) * (self.x - np.square(delta))
         return -self.lr * delta
-
-
-class RMSprop(Optimizer):
-    # RMSprop generalizes* Adagrad, etc.
-
-    # * RMSprop == Adagrad when
-    #   RMSprop.mu == 1
-
-    def __init__(self, lr=1e-4, mu=0.99, eps=1e-8):
-        self.mu = _f(mu)  # decay term
-        self.eps = _f(eps)
-
-        # one might consider the following equation when specifying mu:
-        # mu = e**(-1/t)
-        # default: t = -1/ln(0.99) = ~99.5
-        # therefore the default of mu=0.99 means
-        # an input decays to 1/e its original amplitude over 99.5 batches.
-        # (this is from DSP, so how relevant it is in SGD is debatable)
-
-        super().__init__(lr)
-
-    def reset(self):
-        self.g = None
-
-    def compute(self, dW, W):
-        if self.g is None:
-            self.g = np.zeros_like(dW)
-
-        # basically apply a first-order low-pass filter to delta squared,
-        self.g += (1 - self.mu) * (np.square(dW) - self.g)
-
-        # and sqrt it to complete the running root-mean-square approximation.
-        return -self.lr * dW / (np.sqrt(self.g) + self.eps)
 
 
 class RMSpropCentered(Optimizer):
@@ -162,49 +112,6 @@ class RMSpropCentered(Optimizer):
         # self.delta[:] = self.momentum * self.delta + temp
         # return -self.lr * self.delta
         # they are equivalent only when LR is constant, which it might not be.
-
-
-class Adam(Optimizer):
-    # paper: https://arxiv.org/abs/1412.6980
-    # Adam generalizes* RMSprop, and
-    # adds a decay term to the regular (non-squared) delta, and performs
-    # debiasing to compensate for the filtered deltas starting from zero.
-
-    # * Adam == RMSprop when
-    #   Adam.b1 == 0
-    #   Adam.b2 == RMSprop.mu
-
-    def __init__(self, lr=0.002, b1=0.9, b2=0.999, eps=1e-8):
-        self.b1 = _f(b1)  # decay term
-        self.b2 = _f(b2)  # decay term
-        self.b1_t_default = _f(b1)  # decay term power t
-        self.b2_t_default = _f(b2)  # decay term power t
-        self.eps = _f(eps)
-
-        super().__init__(lr)
-
-    def reset(self):
-        self.mt = None
-        self.vt = None
-        self.b1_t = self.b1_t_default
-        self.b2_t = self.b2_t_default
-
-    def compute(self, dW, W):
-        if self.mt is None:
-            self.mt = np.zeros_like(dW)
-        if self.vt is None:
-            self.vt = np.zeros_like(dW)
-
-        # decay gain
-        self.b1_t *= self.b1
-        self.b2_t *= self.b2
-
-        # filter
-        self.mt += (1 - self.b1) * (dW - self.mt)
-        self.vt += (1 - self.b2) * (np.square(dW) - self.vt)
-
-        return -self.lr * (self.mt / (1 - self.b1_t)) \
-            / (np.sqrt(self.vt / (1 - self.b2_t)) + self.eps)
 
 
 class Nadam(Optimizer):
@@ -255,8 +162,6 @@ class Nadam(Optimizer):
 
         return -self.lr * mt_bar / (np.sqrt(vtp) + self.eps)
 
-
-# more
 
 class FTML(Optimizer):
     # paper: http://www.cse.ust.hk/~szhengac/papers/icml17.pdf
@@ -590,54 +495,6 @@ class Neumann(Optimizer):
         # weights and accumulator:
         W += mu * self.mt - self.lr * dt
         self.vt = W + self.gamma * (self.vt - W)
-
-
-class AMSgrad(Optimizer):
-    # paper: https://openreview.net/forum?id=ryQu7f-RZ
-    # based on Adam. this simply adds a running element-wise maximum to vt.
-
-    def __init__(self, lr=0.002, b1=0.9, b2=0.999, eps=1e-8, debias=True):
-        self.b1 = _f(b1)  # decay term
-        self.b2 = _f(b2)  # decay term
-        self.b1_t_default = _f(b1)  # decay term power t
-        self.b2_t_default = _f(b2)  # decay term power t
-        self.eps = _f(eps)
-        self.debias = bool(debias)
-
-        super().__init__(lr)
-
-    def reset(self):
-        self.mt = None
-        self.vt = None
-        self.vtmax = None
-        self.b1_t = self.b1_t_default
-        self.b2_t = self.b2_t_default
-
-    def compute(self, dW, W):
-        if self.mt is None:
-            self.mt = np.zeros_like(dW)
-        if self.vt is None:
-            self.vt = np.zeros_like(dW)
-        if self.vtmax is None:
-            self.vtmax = np.zeros_like(dW)
-
-        # filter
-        self.mt += (1 - self.b1) * (dW - self.mt)
-        self.vt += (1 - self.b2) * (np.square(dW) - self.vt)
-
-        self.vtmax = np.maximum(self.vtmax, self.vt)
-
-        if self.debias:
-            ret = -self.lr * (self.mt / (1 - self.b1_t)) \
-                / (np.sqrt(self.vtmax / (1 - self.b2_t)) + self.eps)
-        else:
-            ret = -self.lr * self.mt / (np.sqrt(self.vtmax) + self.eps)
-
-        # decay gain
-        self.b1_t *= self.b1
-        self.b2_t *= self.b2
-
-        return ret
 
 
 class Adamlike(Optimizer):
