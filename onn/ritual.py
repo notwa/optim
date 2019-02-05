@@ -38,7 +38,7 @@ class StochMRitual(Ritual):
         self.W = np.copy(model.W)
         super().prepare(model)
 
-    def learn(self, inputs, outputs):
+    def _learn(self, inputs, outputs):
         # an experiment:
         # assert self.learner.rate < 10, self.learner.rate
         # self.gamma = 1 - 1/2**(1 - np.log10(self.learner.rate))
@@ -51,7 +51,7 @@ class StochMRitual(Ritual):
         self.model.W[:] = self.W
         return residual
 
-    def update(self):
+    def _update(self):
         super().update()
         f = 0.5
         for layer in self.model.ordered_nodes:
@@ -68,7 +68,7 @@ class NoisyRitual(Ritual):
         self.gradient_noise = _f(gradient_noise)
         super().__init__(learner)
 
-    def learn(self, inputs, outputs):
+    def _learn(self, inputs, outputs):
         # this is pretty crude
         if self.input_noise > 0:
             s = self.input_noise
@@ -78,7 +78,7 @@ class NoisyRitual(Ritual):
             outputs = outputs + np.random.normal(0, s, size=outputs.shape)
         return super().learn(inputs, outputs)
 
-    def update(self):
+    def _update(self):
         # gradient noise paper: https://arxiv.org/abs/1511.06807
         if self.gradient_noise > 0:
             size = len(self.model.dW)

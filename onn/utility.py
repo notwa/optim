@@ -37,6 +37,32 @@ def onehot(y):
     return Y
 
 
+def batchize(inputs, outputs, batch_size, shuffle=True):
+    batch_count = np.ceil(len(inputs) / batch_size).astype(int)
+
+    if shuffle:
+        def gen():
+            indices = np.arange(len(inputs))
+            np.random.shuffle(indices)
+
+            for b in range(batch_count):
+                bi = b * batch_size
+                batch_indices = indices[bi:bi + batch_size]
+                batch_inputs = inputs[batch_indices]
+                batch_outputs = outputs[batch_indices]
+                yield batch_inputs, batch_outputs
+
+    else:
+        def gen():
+            for b in range(batch_count):
+                bi = b * batch_size
+                batch_inputs = inputs[bi:bi + batch_size]
+                batch_outputs = outputs[bi:bi + batch_size]
+                yield batch_inputs, batch_outputs
+
+    return gen(), batch_count
+
+
 # more
 
 _log_was_update = False
