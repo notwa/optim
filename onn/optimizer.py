@@ -77,7 +77,7 @@ class Adadelta(Optimizer):
 
 class RMSpropCentered(Optimizer):
     # referenced TensorFlow/PyTorch.
-    # paper: https://arxiv.org/abs/1308.0850v5
+    # paper: https://arxiv.org/abs/1308.0850
 
     def __init__(self, lr=1e-4, aleph=0.95, momentum=0.9, eps=1e-8):
         self.aleph = _f(aleph)
@@ -382,11 +382,11 @@ class Neumann(Optimizer):
 
 
 class Adamlike(Optimizer):
-    # this generalizes a lot of algorithms that are
-    # either subsets or supersets of the Adam optimizer.
+    # this generalizes a lot of algorithms that
+    # either subsets or supersets the Adam optimizer.
     # refer to the subclasses for details.
 
-    # the arguments to init default to Adam's.
+    # these defaults match Adam's.
     def __init__(self, lr=0.001, b1=0.9, b2=0.999,
                  power=1/2, debias=True, runmax=False, eps=1e-8):
         self.b1 = _f(b1)  # decay term
