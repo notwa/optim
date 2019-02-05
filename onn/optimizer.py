@@ -34,6 +34,8 @@ class Momentum(Optimizer):
     def reset(self):
         self.Vprev = None
 
+        super().reset()
+
     def compute(self, dW, W):
         if self.Vprev is None:
             self.Vprev = np.copy(dW)
@@ -58,6 +60,8 @@ class Adadelta(Optimizer):
     def reset(self):
         self.g = None
         self.x = None
+
+        super().reset()
 
     def compute(self, dW, W):
         if self.g is None:
@@ -87,6 +91,8 @@ class RMSpropCentered(Optimizer):
         self.mt = None
         self.vt = None
         self.delta = None
+
+        super().reset()
 
     def compute(self, dW, W):
         if self.g is None:
@@ -136,6 +142,8 @@ class Nadam(Optimizer):
         self.t = 0
         self.sched = 1
 
+        super().reset()
+
     def compute(self, dW, W):
         self.t += 1
 
@@ -184,6 +192,8 @@ class FTML(Optimizer):
         self.b1_t = _1
         self.b2_t = _1
 
+        super().reset()
+
     def compute(self, dW, W):
         if self.dt1 is None:
             self.dt1 = np.zeros_like(dW)
@@ -231,6 +241,8 @@ class MomentumClip(Optimizer):
     def reset(self):
         self.accum = None
 
+        super().reset()
+
     def compute(self, dW, W):
         if self.accum is None:
             self.accum = np.zeros_like(dW)
@@ -261,6 +273,8 @@ class AddSign(Optimizer):
     def reset(self):
         self.accum = None
 
+        super().reset()
+
     def compute(self, dW, W):
         if self.accum is None:
             self.accum = np.zeros_like(dW)
@@ -285,6 +299,8 @@ class PowerSign(Optimizer):
 
     def reset(self):
         self.accum = None
+
+        super().reset()
 
     def compute(self, dW, W):
         if self.accum is None:
@@ -325,6 +341,8 @@ class Neumann(Optimizer):
         self.mt = None  # momentum accumulator.
         self.vt = None  # weight accumulator.
         self.t = 0
+
+        super().reset()
 
     def compute(self, dW, W):
         raise Exception("compute() is not available for this Optimizer.")
@@ -388,6 +406,8 @@ class Adamlike(Optimizer):
         self.vtmax = None
         self.b1_t = self.b1_t_default
         self.b2_t = self.b2_t_default
+
+        super().reset()
 
     def compute(self, dW, W):
         if self.mt is None:

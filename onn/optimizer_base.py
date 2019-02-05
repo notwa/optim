@@ -6,10 +6,11 @@ from .float import _f
 class Optimizer:
     def __init__(self, lr=0.1):
         self.lr = _f(lr)  # learning rate
+        self.base_rate = self.lr
         self.reset()
 
     def reset(self):
-        pass
+        self.lr = self.base_rate
 
     def compute(self, dW, W):
         return -self.lr * dW
