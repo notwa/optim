@@ -260,3 +260,47 @@ class HardClip(Activation):  # aka HardTanh when at default settings
 
     def backward(self, dY):
         return dY * ((self.X >= self.lower) & (self.X <= self.upper))
+
+
+class PolyFeat(Layer):
+    # i haven't yet decided if this counts as an Activation subclass
+    # due to the increased output size, so i'm opting not to inherit it.
+
+    # an incomplete re-implementation of the following, but with gradients:
+    # http://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.PolynomialFeatures.html
+    # i would not recommend using it with input sizes greater than 50.
+
+    def __init__(self, ones_term=True):
+        super().__init__()
+        self.ones_term = bool(ones_term)
+
+    def make_shape(self, parent):
+        shape = parent.output_shape
+        assert len(shape) == 1, shape
+        self.input_shape = shape
+        self.dim = shape[0] + shape[0] * (shape[0] + 1) // 2
+        if self.ones_term:
+            self.dim += 1
+        self.output_shape = (self.dim,)
+
+    def forward(self, X):
+        self.X = X
+        ones = [np.ones((X.shape[0], 1))] if self.ones_term else []
+        return np.concatenate(ones + [X] + [X[:, i][:, None] * X[:, i:]
+                              for i in range(X.shape[1])], axis=1)
+
+    def backward(self, dY):
+        bp = self.input_shape[0]
+        if self.ones_term:
+            dY = dY[:, 1:]
+        dX = dY[:, :bp].copy()
+        rem = dY[:, bp:]
+
+        # TODO: optimize.
+        temp = np.zeros((dY.shape[0], bp, bp))
+        for i in range(bp):
+            temp[:, i, i:] = rem[:, :bp - i]
+            rem = rem[:, bp - i:]
+
+        dX += ((temp + temp.transpose(0, 2, 1)) * self.X[:, :, None]).sum(1)
+        return dX
