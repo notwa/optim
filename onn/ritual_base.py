@@ -9,9 +9,11 @@ Losses = namedtuple("Losses", ["avg_loss", "avg_mloss", "losses", "mlosses"])
 
 
 class Ritual:  # i'm just making up names at this point.
-    def __init__(self, learner=None):
+    def __init__(self, learner=None, model=None):
         self.learner = learner if learner is not None else Learner(Optimizer())
         self.model = None
+        if model is not None:
+            self.prepare(model)
 
     def reset(self):
         self.learner.reset(optim=True)
