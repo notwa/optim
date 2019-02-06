@@ -120,7 +120,7 @@ class GeluApprox(Swish):
     #  plot: https://www.desmos.com/calculator/ydzgtccsld
 
     def __init__(self):
-        super().__init__(_f(1.704))
+        super().__init__(_f(1.702))
 
 
 class Gelu(Activation):
