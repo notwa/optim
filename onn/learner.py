@@ -136,18 +136,18 @@ class TriangularCLR(Learner):
     per_batch = True
 
     def __init__(self, optim, epochs=400, upper_rate=None, lower_rate=0,
-                 frequency=100, callback=None):
+                 period=100, callback=None):
         # NOTE: start_rate is treated as upper_rate
-        self.frequency = int(frequency)
-        assert self.frequency > 0
+        self.period = int(period)
+        assert self.period > 0
         self.callback = callback
         self.lower_rate = _f(lower_rate)
         super().__init__(optim, epochs, upper_rate)
 
     def _t(self, epoch):
         # NOTE: this could probably be simplified
-        offset = self.frequency / 2
-        return np.abs(((epoch - 1 + offset) % self.frequency) - offset) \
+        offset = self.period / 2
+        return np.abs(((epoch - 1 + offset) % self.period) - offset) \
             / offset
 
     def rate_at(self, epoch):
@@ -160,9 +160,9 @@ class TriangularCLR(Learner):
         if not super().next():
             return False
         e = self.epoch - 1
-        if e > 0 and e % self.frequency == 0:
+        if e > 0 and e % self.period == 0:
             if self.callback is not None:
-                self.callback(self.epoch // self.frequency)
+                self.callback(self.epoch // self.period)
         return True
 
 
