@@ -325,13 +325,15 @@ class Neumann(Optimizer):
     #       you can do this yourself if you really want to.
     #       it seems to be enough to use a slow-starting Learner like SineCLR.
 
-    def __init__(self, lr=0.01):
-        self.alpha = _f(1e-7)  # cubic.
-        self.beta = _f(1e-5)  # repulsive. NOTE: multiplied by len(dW) later.
-        self.gamma = _f(0.99)  # EMA, or 1-pole low-pass parameter. same thing.
-        # momentum is ∝ (in the shape of) 1 - 1/(1 + t)
-        self.mu_min = _f(0.5)
-        self.mu_max = _f(0.9)
+    def __init__(self, lr=0.01, delta=1.0,
+                 alpha=1e-7, beta=1e-5, gamma=0.99, mu_min=0.5, mu_max=0.9):
+        self.delta = _f(delta) # delta-time.
+        self.alpha = _f(alpha)  # cubic.
+        self.beta = _f(beta)  # repulsive. NOTE: multiplied by len(dW) later.
+        self.gamma = _f(gamma)  # EMA, or 1-pole low-pass parameter. same thing.
+        # momentum is in the shape of 1 - 1/(1 + t)
+        self.mu_min = _f(mu_min)
+        self.mu_max = _f(mu_max)
         self.reset_period = 0  # TODO
 
         super().__init__(lr)
@@ -348,8 +350,6 @@ class Neumann(Optimizer):
         raise Exception("compute() is not available for this Optimizer.")
 
     def update(self, dW, W):
-        self.t += 1
-
         if self.mt is None:
             self.mt = np.zeros_like(dW)
         if self.vt is None:
@@ -360,10 +360,12 @@ class Neumann(Optimizer):
             return
 
         # momentum quantity:
-        mu = _1 - _1/_f(self.t)  # the + 1 is implicit.
+        mu = _1 - _1/_f(self.t + _1)
         mu = (self.mu_max - self.mu_max) * mu + self.mu_min
 
-        # smoothed change in weights:
+        self.t += self.delta
+
+        # change in smoothed weights:
         delta = W - self.vt
         delta_norm_squared = np.square(delta).sum()
         delta_norm = np.sqrt(delta_norm_squared)
@@ -373,11 +375,12 @@ class Neumann(Optimizer):
         repulsive_reg = self.beta * dW.size / delta_norm_squared
         dt = dW + (cubic_reg - repulsive_reg) * (delta / delta_norm)
 
-        # plain momentum:
+        # Richardson iteration disguised as plain momentum:
         self.mt = mu * self.mt - self.lr * dt
+        # this is only a good approximation for small ||self.lr * self.mt||.
 
-        # weights and accumulator:
-        W += mu * self.mt - self.lr * dt
+        # update weights and moving average:
+        W += mu * self.mt - self.lr * dt  # essentially Nesterov momentum.
         self.vt = W + self.gamma * (self.vt - W)
 
 
