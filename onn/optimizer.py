@@ -361,7 +361,7 @@ class Neumann(Optimizer):
 
         # momentum quantity:
         mu = _1 - _1/_f(self.t)  # the + 1 is implicit.
-        mu = (mu + self.mu_min) * (self.mu_max - self.mu_min)
+        mu = (self.mu_max - self.mu_max) * mu + self.mu_min
 
         # smoothed change in weights:
         delta = W - self.vt
