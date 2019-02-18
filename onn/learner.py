@@ -50,12 +50,16 @@ class Learner:
             return False
         return True
 
-    def batch(self, progress):  # TODO: rename
+    def batch(self, progress):  # TODO: rename.
         # interpolates rates between epochs.
         # unlike epochs, we do not store batch number as a state.
         # i.e. calling next() will not respect progress.
         assert 0 <= progress <= 1
         self.rate = self.rate_at(self._epoch + progress)
+
+    def each_epoch(self):  # TODO: rename?
+        while self.next():
+            yield self.epoch
 
     @property
     def final_rate(self):
