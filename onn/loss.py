@@ -20,6 +20,43 @@ class NLL(Loss):  # Negative Log Likelihood
         return -y / len(p)
 
 
+class HingeWW(Loss):
+    # multi-class hinge-loss, Weston & Watkins variant.
+
+    def forward(self, p, y):
+        # TODO: rename score since less is better.
+        score = p * (1 - y) - p * y
+        return np.mean(np.sum(np.maximum(1 + score, 0), axis=-1))
+
+    def backward(self, p, y):
+        score = p * (1 - y) - p * y
+        d_score = 1 - y - y
+        return (score >= -1) * d_score / len(y)
+
+
+class HingeCS(Loss):
+    # multi-class hinge-loss, Crammer & Singer variant.
+    # this has been loosely extended to support multiple true classes.
+    # however, it should generally be used such that
+    # p is a vector that sums to 1 with values in [0, 1],
+    # and y is a one-hot encoding of the correct class.
+
+    def forward(self, p, y):
+        wrong = np.max((1 - y) * p, axis=-1)
+        right = np.max(y * p, axis=-1)
+        f = np.maximum(1 + wrong - right, 0)
+        return np.mean(f)
+
+    def backward(self, p, y):
+        wrong_in = (1 - y) * p
+        right_in = y * p
+        wrong = np.max(wrong_in, axis=-1, keepdims=True)
+        right = np.max(right_in, axis=-1, keepdims=True)
+        # note: this could go haywire if the maximum is not unique.
+        delta = (1 - y) * (wrong_in == wrong) - y * (right_in == right)
+        return (wrong - right >= -1) * delta / len(y)
+
+
 class CategoricalCrossentropy(Loss):
     # lifted from theano
 
