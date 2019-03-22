@@ -135,6 +135,16 @@ class Huber(ResidualLoss):
                         self.delta * np.sign(r))
 
 
+def LogCosh(ResidualLoss):
+    # essentially a smooth version of Huber loss.
+
+    def f(self, r):
+        return np.log(np.cosh(x))
+
+    def df(self, r):
+        return np.tanh(r)
+
+
 # more
 
 class SomethingElse(ResidualLoss):
