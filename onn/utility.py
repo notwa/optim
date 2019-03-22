@@ -36,7 +36,7 @@ def div0(a, b):
     b = np.asanyarray(b)
     with np.errstate(divide='ignore', invalid='ignore'):
         c = np.true_divide(a, b)
-        c[~np.isfinite(c)] = 0 # -inf inf NaN
+        c[~np.isfinite(c)] = 0  # -inf inf NaN
     return c
 
 

@@ -326,9 +326,9 @@ class Neumann(Optimizer):
 
     def __init__(self, lr=0.01, delta=1.0,
                  alpha=1e-7, beta=1e-5, gamma=0.99, mu_min=0.5, mu_max=0.9):
-        self.delta = _f(delta) # delta-time.
+        self.delta = _f(delta)  # delta-time.
         self.alpha = _f(alpha)  # cubic.
-        self.beta = _f(beta)  # repulsive. NOTE: multiplied by len(dW) later.
+        self.beta = _f(beta)    # repulsive. NOTE: multiplied by len(dW) later.
         self.gamma = _f(gamma)  # EMA, or 1-pole low-pass parameter. same thing.
         # momentum is in the shape of 1 - 1/(1 + t)
         self.mu_min = _f(mu_min)
@@ -409,8 +409,6 @@ class Adamax(Optimizer):
             self.mt = np.zeros_like(dW)
         if self.vt is None:
             self.vt = np.zeros_like(dW)
-            #self.vt = np.full_like(dW, 0.001)  # NOTE: experimenting.
-            #self.vt = np.full_like(dW, self.lr)  # NOTE: experimenting.
 
         mt = filter_gradients(self.mt, dW, self.b1)
         vt = np.maximum(self.b2 * self.vt, np.abs(dW))
