@@ -22,7 +22,7 @@ def lower_priority():
         except ImportError:
             lament("you do not have pywin32 installed.")
             lament("the process priority could not be lowered.")
-            lament("consider: python -m pip install pypiwin32")
+            lament("consider: python -m pip install pywin32")
             lament("consider: conda install pywin32")
     else:
         import os
