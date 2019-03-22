@@ -29,6 +29,17 @@ def lower_priority():
         os.nice(1)
 
 
+def div0(a, b):
+    """division, whereby division by zero equals zero"""
+    # http://stackoverflow.com/a/35696047
+    a = np.asanyarray(a)
+    b = np.asanyarray(b)
+    with np.errstate(divide='ignore', invalid='ignore'):
+        c = np.true_divide(a, b)
+        c[~np.isfinite(c)] = 0 # -inf inf NaN
+    return c
+
+
 def onehot(y):
     unique = np.unique(y)
     Y = np.zeros((y.shape[0], len(unique)), dtype=np.int8)
