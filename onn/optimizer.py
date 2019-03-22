@@ -383,6 +383,51 @@ class Neumann(Optimizer):
         self.vt = W + self.gamma * (self.vt - W)
 
 
+class Adamax(Optimizer):
+    # TODO: paper?
+
+    def __init__(self, lr=0.001, b1=0.9, b2=0.999, debias=False, eps=1e-8):
+        self.b1 = _f(b1)  # decay term
+        self.b2 = _f(b2)  # decay term
+        self.b1_t_default = _f(b1)  # decay term power t
+        self.b2_t_default = _f(b2)  # decay term power t
+        self.debias = bool(debias)
+        self.eps = _f(eps)
+
+        super().__init__(lr)
+
+    def reset(self):
+        self.mt = None
+        self.vt = None
+        self.b1_t = self.b1_t_default
+        self.b2_t = self.b2_t_default
+
+        super().reset()
+
+    def compute(self, dW, W):
+        if self.mt is None:
+            self.mt = np.zeros_like(dW)
+        if self.vt is None:
+            self.vt = np.zeros_like(dW)
+            #self.vt = np.full_like(dW, 0.001)  # NOTE: experimenting.
+            #self.vt = np.full_like(dW, self.lr)  # NOTE: experimenting.
+
+        mt = filter_gradients(self.mt, dW, self.b1)
+        vt = np.maximum(self.b2 * self.vt, np.abs(dW))
+
+        if self.debias:
+            if self.b1_t != 1:
+                mt = mt / (1 - self.b1_t)
+            if self.b2_t != 1:
+                vt = vt / (1 - self.b2_t)
+
+            # decay gain.
+            self.b1_t *= self.b1
+            self.b2_t *= self.b2
+
+        return -self.lr * mt / (vt + self.eps)
+
+
 class Adamlike(Optimizer):
     # this generalizes a lot of algorithms that
     # either subsets or supersets the Adam optimizer.
