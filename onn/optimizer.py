@@ -585,3 +585,13 @@ class Padam(Adamlike):
                  power=1/8, debias=True, eps=1e-8):
         super().__init__(lr=lr, b1=b1, b2=b2, power=power,
                          debias=debias, runmax=True, yogi=False, eps=eps)
+
+
+AMSGrad = AMSgrad
+AdaDelta = Adadelta
+AdaGrad = Adagrad
+AdaMax = Adamax
+NAdam = Nadam
+PAdam = Padam
+RMSProp = RMSprop
+RMSPropCentered = RMSpropCentered
