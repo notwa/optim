@@ -182,3 +182,26 @@ class LookupLearner(Learner):
         else:
             ind = min(int(epoch), len(self.rates) - 1)
             return _f(self.rates[ind])
+
+
+class Confidence(Loss):
+    # this isn't "confidence" in any meaningful way; (e.g. Bayesian)
+    # it's just a metric of how large the value is of the predicted class.
+    # when using it for loss, it acts like a crappy regularizer.
+    # it really just measures how much of a hot-shot the network thinks it is.
+
+    def forward(self, p, y=None):
+        categories = p.shape[-1]
+        confidence = (np.max(p, axis=-1) - 1/categories) / (1 - 1/categories)
+        # the exponent in softmax puts a maximum on confidence,
+        # but we don't compensate for that. if necessary,
+        # it'd be better to use an activation that doesn't have this limit.
+        return np.mean(confidence)
+
+    def backward(self, p, y=None):
+        # in order to agree with the forward pass,
+        # using this backwards pass as-is will minimize confidence.
+        categories = p.shape[-1]
+        detc = p / categories / (1 - 1/categories)
+        dmax = p == np.max(p, axis=-1, keepdims=True)
+        return detc * dmax
