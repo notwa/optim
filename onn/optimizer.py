@@ -436,8 +436,8 @@ class Adamlike(Optimizer):
                  debias=True, runmax=False, yogi=False, eps=1e-8):
         self.b1 = _f(b1)  # decay term
         self.b2 = _f(b2)  # decay term
-        self.b1_t_default = _f(b1)  # decay term power t
-        self.b2_t_default = _f(b2)  # decay term power t
+        self.b1_t_default = _f(np.abs(b1))  # decay term power t
+        self.b2_t_default = _f(np.abs(b2))  # decay term power t
         self.power = _f(power)
         self.debias = bool(debias)
         self.runmax = bool(runmax)
@@ -487,17 +487,19 @@ class Adamlike(Optimizer):
             delta = mt
         elif self.power == 1:
             delta = mt / (vt + self.eps)
-        elif self.power == 1/2:  # TODO: is this actually faster?
+        elif self.power == 1/2:
             delta = mt / (np.sqrt(vt) + self.eps)
-        elif self.power == 1/3:  # TODO: is this actually faster?
+        elif self.power == 1/3:
             delta = mt / (np.cbrt(vt) + self.eps)
+        elif self.power == 1/4:
+            delta = mt / (np.sqrt(np.sqrt(vt)) + self.eps)
         else:
             delta = mt / (vt**self.power + self.eps)
 
         if self.debias:
             # decay gain.
-            self.b1_t *= self.b1
-            self.b2_t *= self.b2
+            self.b1_t *= np.abs(self.b1)
+            self.b2_t *= np.abs(self.b2)
 
         return -self.lr * delta
 
