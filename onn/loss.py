@@ -12,6 +12,10 @@ class Loss:
 
 
 class NLL(Loss):  # Negative Log Likelihood
+    # NOTE: this is a misnomer -- the "log" part is not implemented here.
+    #       instead, you should use a Log activation at the end of your network
+    #       e.g. LogSoftmax.
+    #       TODO: simplify the math that comes about it.
     def forward(self, p, y):
         correct = p * y
         return np.mean(-correct)
