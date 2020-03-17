@@ -262,6 +262,23 @@ class HardClip(Activation):  # aka HardTanh when at default settings
         return dY * ((self.X >= self.lower) & (self.X <= self.upper))
 
 
+class ISRLU(Activation):
+    # Inverse Square Root Linear Unit, a faster alternative to ELU
+    # paper: https://arxiv.org/abs/1710.09967
+
+    def __init__(self, alpha=1.0):
+        super().__init__()
+        self.alpha = _f(alpha)
+
+    def forward(self, X):
+        self.memo = np.reciprocal(np.sqrt(1 + X * X * self.alpha))
+        self.cond = X < 0
+        return np.where(self.cond, X * self.memo, X)
+
+    def backward(self, dY):
+        return self.cond * self.memo * self.memo * self.memo * dY
+
+
 class PolyFeat(Layer):
     # i haven't yet decided if this counts as an Activation subclass
     # due to the increased output size, so i'm opting not to inherit it.
