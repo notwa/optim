@@ -1,84 +1,102 @@
 # neural network stuff
 
-not unlike [my dsp repo,](https://github.com/notwa/dsp)
-this is a bunch of half-baked python code that's kinda handy.
+not unlike [my DSP repo,](https://github.com/notwa/dsp)
+`onn` is a bunch of half-baked python code that's kinda handy.
 i give no guarantee anything provided here is correct.
 
 don't expect commits, docs, or comments to be any verbose.
+however, i do attempt to cite and source any techniques used.
 
-## other stuff
+## alternatives
 
-if you're coming here from Google: sorry, keep searching.
-i know Google sometimes likes to give random repositories a high search ranking.
-maybe consider one of the following:
+when creating this, i wanted a library free of compilation
+and heavy dependencies — other than numpy and scipy, but these are commonplace.
+although `onn` is significantly faster than equivalent autograd code,
+performance is not a concern and it cannot run on GPU.
+
+since this is my personal repo, i recommend that others do not rely on it.
+instead, consider one of the following:
 
 * [keras](https://github.com/fchollet/keras)
-  for easy tensor-optimized networks.
-  strong [tensorflow](http://tensorflow.org) integration as of version 2.0.
-  also check out the
+  it's now integrated directly into [tensorflow.](https://tensorflow.org).
+  it runs on CPU and GPU. however, it requires a compilation stage.
+* also check out the
   [keras-contrib](https://github.com/farizrahman4u/keras-contrib)
-  library for more components based on recent papers.
-* [theano's source code](https://github.com/Theano/theano/blob/master/theano/tensor/nnet/nnet.py)
-  contains pure numpy test methods to reference against.
+  library for more keras components based on recent papers.
+* the library itself may be discontinued, but
+  [theano's source code](https://github.com/Theano/theano/blob/master/theano/tensor/nnet/nnet.py)
+  contains pure numpy test methods as reference.
 * [minpy](https://github.com/dmlc/minpy)
   for tensor-powered numpy routines and automatic differentiation.
+  deprecated by [mxnet.](https://github.com/apache/incubator-mxnet)
+  i've never used either so i don't know what mxnet is like.
 * [autograd](https://github.com/HIPS/autograd)
   for automatic differentiation without tensors.
+  this is my personal favorite, although it is a little slow.
+* autograd has been discontinued in favor of
+  [Google's JAX,](https://github.com/google/jax)
+  however, JAX is quite heavy and non-portable in comparison.
+  JAX runs on CPU and GPU and it can skip compilation on CPU.
 
 ## dependencies
 
 python 3.5+
 
-mandatory packages: numpy scipy
+mandatory packages: `numpy` `scipy`
 
-needed for saving weights: h5py
+needed for saving weights: `h5py`
 
-used in example code: dotmap
+used in example code: `dotmap`
 
 ## minimal example
 
 ```python
 #!/usr/bin/env python3
+import numpy as np
+import mnists  # https://github.com/notwa/mnists
 from onn import *
-bs = 500
-lr = 0.01
-reg = L1L2(3.2e-5, 3.2e-4)
-final_reg = L1L2(3.2e-5, 1e-3)
 
-def get_mnist(fn='mnist.npz'):
-    with np.load(fn) as f:
-        return f['X_train'], f['Y_train'], f['X_test'], f['Y_test']
-inputs, outputs, valid_inputs, valid_outputs = get_mnist()
+train_x, train_y, valid_x, valid_y = mnists.prepare("mnist")
+learning_rate = 0.01
+epochs = 20
+batch_size = 500
+hidden_size = 196  # 1/4 the number of pixels in an mnist sample
+reg = L1L2(1e-5, 1e-4)
+final_reg = None
 
-x = Input(shape=inputs.shape[1:])
-y = x
+x = Input(shape=train_x.shape[1:])  # give the shape of a single example
+y = x  # superficial code just to make changing layer order a little easier
 y = y.feed(Flatten())
-y = y.feed(Dense(y.output_shape[0], init=init_he_normal, reg_w=reg, reg_b=reg))
-y = y.feed(Relu())
-y = y.feed(Dense(y.output_shape[0], init=init_he_normal, reg_w=reg, reg_b=reg))
-y = y.feed(Dropout(0.05))
-y = y.feed(Relu())
+y = y.feed(Dense(hidden_size, init=init_he_normal, reg_w=reg, reg_b=reg))
+y = y.feed(Dropout(0.5))
+y = y.feed(GeluApprox())
 y = y.feed(Dense(10, init=init_glorot_uniform, reg_w=final_reg, reg_b=final_reg))
 y = y.feed(Softmax())
-model = Model(x, y, loss=CategoricalCrossentropy(), mloss=Accuracy(), unsafe=True)
+model = Model(x, y,  # follow the graph from node x to y
+              loss=CategoricalCrossentropy(), mloss=Accuracy(),
+              unsafe=True)  # skip some sanity checks to go faster
 
-optim = Adam()
-learner = SGDR(optim, epochs=20, rate=lr, restarts=1)
-ritual = Ritual(learner=learner)
-ritual.prepare(model)
+optim = Adam()  # good ol' adam
+learner = WaveCLR(optim, upper_rate=learning_rate,
+                  epochs=epochs, period=epochs)  # ramp up and down the rate
+ritual = Ritual(learner=learner)  # the accursed deep-learning ritual
+
+ritual.prepare(model)  # reset training
 while learner.next():
     print("epoch", learner.epoch)
-    mloss, _ = ritual.train_batched(inputs, outputs, batch_size=bs, return_losses=True)
-    print("train accuracy", "{:6.2f}%".format(mloss * 100))
+    losses = ritual.train(*batchize(train_x, train_y, batch_size))
+    print("train accuracy", "{:6.2%}".format(losses.avg_mloss))
 
-def print_error(name, inputs, outputs):
-    loss, mloss, _, _ = ritual.test_batched(inputs, outputs, bs, return_losses='both')
-    print(name + " loss", "{:12.6e}".format(loss))
-    print(name + " accuracy", "{:6.2f}%".format(mloss * 100))
-print_error("train", inputs, outputs)
-print_error("valid", valid_inputs, valid_outputs)
-predicted = model.evaluate(inputs) # use this as you will!
+def print_error(name, train_x, train_y):
+    losses = ritual.test_batched(train_x, train_y, batch_size)
+    print(name + " loss", "{:12.6e}".format(losses.avg_loss))
+    print(name + " accuracy", "{:6.2%}".format(losses.avg_mloss))
+print_error("train", train_x, train_y)
+print_error("valid", valid_x, valid_y)
+predicted = model.evaluate(train_x)  # use this as you will!
 ```
+
+[(mnists is available here)](https://github.com/notwa/mnists)
 
 ## contributing
 
